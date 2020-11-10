@@ -1,0 +1,24 @@
+﻿int0 = 0
+int1 = -2147483648
+str0 = "str0"
+str1 = 'str1'
+
+ints = [1, 2, 3]
+
+[table]
+key = "value"
+bare_key = "value"
+bare-key = "value"
+
+"127.0.0.1" = "value"
+"character encoding" = "value"
+
+name = { first = "Tom", last = "Preston-Werner" }
+
+[a.b]
+name = { first = "TS", last = 'PS' }
+
+[[c]]
+name = 'name0'
+[[c]]
+name = 'name1'
