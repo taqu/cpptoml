@@ -1,0 +1,5 @@
+﻿---
+Checks:            'clang-diagnostic-*,clang-analyzer-*,cppcoreguidelines-*,modernize-*,-modernize-use-trailing-return-type,readability-*'
+WarningsAsErrors:  ''
+HeaderFilterRegex: '.*'
+FormatStyle:       'none'

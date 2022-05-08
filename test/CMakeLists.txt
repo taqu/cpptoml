@@ -41,5 +41,5 @@ set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT ${ProjectName})
 set_target_properties(${ProjectName}
     PROPERTIES
         OUTPUT_NAME_DEBUG "${ProjectName}" OUTPUT_NAME_RELEASE "${ProjectName}"
-        VS_DEBUGGER_WORKING_DIRECTORY "${OUTPUT_DIRECTORY}")
+        VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
