@@ -73,7 +73,7 @@ CPPTOML_NAMESPAFCE_BEGIN
 #ifndef CPPTOML_TYPES
 #    define CPPTOML_TYPES
 #    ifdef __cplusplus
-#define CPPTOML_CPP
+#        define CPPTOML_CPP
 using s8 = int8_t;
 using s16 = int16_t;
 using s32 = int32_t;
@@ -177,6 +177,7 @@ public:
 
     bool parse(cursor head, cursor end);
     u32 size() const;
+
 private:
     TomlParser(const TomlParser&) = delete;
     TomlParser& operator=(const TomlParser&) = delete;
@@ -184,7 +185,7 @@ private:
     struct Buffer
     {
     public:
-        static constexpr u32 ExpandSize = 4*4096;
+        static constexpr u32 ExpandSize = 4 * 4096;
 
         Buffer(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL);
         ~Buffer();
@@ -192,6 +193,7 @@ private:
         u32 capacity() const;
         u32 size() const;
         void clear();
+
     private:
         Buffer(const Buffer&) = delete;
         Buffer& operator=(const Buffer&) = delete;
@@ -201,28 +203,101 @@ private:
         u32 size_;
     };
 
-    static bool isAlpha(Char c);
-    static bool isDigit(Char c);
-    static bool isHexDigit(Char c);
+    static bool is_alpha(Char c);
+    static bool is_digit(Char c);
+    static bool is_hexdigit(Char c);
+    static bool is_digit19(Char c);
+    static bool is_digit07(Char c);
+    static bool is_digit01(Char c);
+    static bool is_whitespace(Char c);
+    static bool is_basicchar(Char c);
 
-    bool isEnd() const;
-    bool isQuotedKey() const;
-    bool isUnquotedKey() const;
-    bool isTable() const;
+    static bool is_quated_key(Char c);
+    static bool is_unquated_key(Char c);
+    static bool is_table(Char c);
 
-    void skip_bom();
-    void skip_space();
-    void skip_newline();
-    void skip_spacenewline();
-    bool skip_utf8_1();
-    bool skip_utf8_2();
-    bool skip_utf8_3();
-    bool skip_noneol();
-    void skip_comment();
+    cursor skip_bom(cursor str);
+    cursor skip_newline(cursor str);
+    cursor skip_spaces(cursor str);
+    cursor skip_utf8_1(cursor str);
+    cursor skip_utf8_2(cursor str);
+    cursor skip_utf8_3(cursor str);
+    cursor skip_comment(cursor str);
 
-    CppTomlResult parse_expression();
-    CppTomlResult parse_keyval();
-    CppTomlResult parse_table();
+    cursor parse_expression(cursor str);
+    cursor parse_keyval(cursor str);
+    cursor parse_table(cursor str);
+
+    cursor parse_key(cursor str);
+    cursor parse_quated_key(cursor str);
+    cursor parse_unquated_key(cursor str);
+    cursor parse_dot_sep(cursor str);
+    cursor parse_keyval_sep(cursor str);
+    cursor parse_val(cursor str);
+    cursor parse_basic_string(cursor str);
+    cursor parse_basic_char(cursor str);
+    cursor parse_non_ascii(cursor str);
+    cursor parse_non_eol(cursor str);
+    cursor parse_escaped(cursor str);
+    cursor parse_4HEXDIG(cursor str);
+    cursor parse_8HEXDIG(cursor str);
+    cursor parse_literal_string(cursor str);
+    cursor parse_literal_char(cursor str);
+
+    cursor parse_string(cursor str);
+    cursor parse_ml_basic_string(cursor str);
+    cursor parse_ml_basic_body(cursor str);
+    cursor parse_mlb_quotes(cursor str);
+    cursor parse_mlb_content(cursor str);
+    cursor parse_mlb_escaped_nl(cursor str);
+    cursor parse_ml_literal_string(cursor str);
+    cursor parse_ml_literal_body(cursor str);
+    cursor parse_mll_quotes(cursor str);
+    cursor parse_mll_content(cursor str);
+
+    cursor parse_boolean(cursor str);
+
+    cursor parse_array(cursor str);
+    cursor parse_array_values(cursor str);
+    cursor parse_ws_comment_newline(cursor str);
+
+    cursor parse_inline_table(cursor str);
+    cursor parse_inline_table_keyvals(cursor str);
+
+    cursor parse_date_time(cursor str);
+    cursor parse_offset_date_time(cursor str);
+    cursor parse_local_date_time(cursor str);
+    cursor parse_local_date(cursor str);
+    cursor parse_local_time(cursor str);
+    cursor parse_time_delim(cursor str);
+    cursor parse_full_date(cursor str);
+    cursor parse_full_time(cursor str);
+    cursor parse_partial_time(cursor str);
+    cursor parse_date_fullyear(cursor str);
+    cursor parse_date_month(cursor str);
+    cursor parse_date_mday(cursor str);
+    cursor parse_time_hour(cursor str);
+    cursor parse_time_minute(cursor str);
+    cursor parse_time_second(cursor str);
+    cursor parse_time_secfrac(cursor str);
+
+    cursor parse_float(cursor str);
+    cursor parse_special_float(cursor str);
+    cursor parse_float_int_part(cursor str);
+    cursor parse_dec_int(cursor str);
+    cursor parse_unsigned_dec_int(cursor str);
+    cursor parse_exp(cursor str);
+    cursor parse_float_exp_part(cursor str);
+    cursor parse_zero_prefixable_int(cursor str);
+    cursor parse_frac(cursor str);
+
+    cursor parse_integer(cursor str);
+    cursor parse_hex_prefix(cursor str);
+    cursor parse_oct_prefix(cursor str);
+    cursor parse_bin_prefix(cursor str);
+
+    cursor parse_std_table(cursor str);
+    cursor parse_array_table(cursor str);
 
     cpptoml_malloc allocator_;
     cpptoml_free deallocator_;
