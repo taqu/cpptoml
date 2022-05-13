@@ -36,7 +36,7 @@ TEST_CASE("TestToml::Valid")
         return;
     }
     int32_t count = 0;
-    static const int32_t skip = 38;
+    static const int32_t skip = 10;
     do {
         ++count;
         if(count<=skip){
@@ -57,7 +57,7 @@ TEST_CASE("TestToml::InValid")
         return;
     }
     int32_t count = 0;
-    static const int32_t skip = 3;
+    static const int32_t skip = 0;
     do {
         ++count;
         if(count<=skip){

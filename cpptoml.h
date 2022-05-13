@@ -90,7 +90,6 @@ using f64 = double;
 using Char = char;
 using UChar = unsigned char;
 
-static constexpr u32 CppTomlDefaultMaxNest = 512;
 #    else
 #    endif
 #endif // CPPTOML_TYPES
@@ -172,7 +171,7 @@ class TomlParser
 public:
     using cursor = const UChar*;
 
-    TomlParser(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL, u32 max_nests = CppTomlDefaultMaxNest);
+    TomlParser(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL);
     ~TomlParser();
 
     bool parse(cursor head, cursor end);
@@ -211,6 +210,7 @@ private:
     static bool is_digit01(Char c);
     static bool is_whitespace(Char c);
     static bool is_basicchar(Char c);
+    static bool is_newline(Char c);
 
     static bool is_quated_key(Char c);
     static bool is_unquated_key(Char c);
@@ -301,8 +301,6 @@ private:
 
     cpptoml_malloc allocator_;
     cpptoml_free deallocator_;
-    u32 max_nests_;
-    u32 nest_count_;
     cursor begin_ = CPPTOML_NULL;
     cursor current_ = CPPTOML_NULL;
     cursor end_ = CPPTOML_NULL;

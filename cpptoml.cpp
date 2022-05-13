@@ -101,11 +101,9 @@ void TomlParser::Buffer::clear()
     size_ = 0;
 }
 
-TomlParser::TomlParser(cpptoml_malloc allocator, cpptoml_free deallocator, u32 max_nests)
+TomlParser::TomlParser(cpptoml_malloc allocator, cpptoml_free deallocator)
     : allocator_(allocator)
     , deallocator_(deallocator)
-    , max_nests_(max_nests)
-    , nest_count_(0)
     , begin_(CPPTOML_NULL)
     , current_(CPPTOML_NULL)
     , end_(CPPTOML_NULL)
@@ -127,17 +125,16 @@ TomlParser::~TomlParser()
 bool TomlParser::parse(cursor head, cursor end)
 {
     CPPTOML_ASSERT(head <= end);
-    nest_count_ = 0;
     begin_ = current_ = head;
     end_ = end;
     buffer_.clear();
     current_ = skip_bom(current_);
     while(current_ < end_) {
-        cursor expression = parse_expression(current_);
-        if(CPPTOML_NULL == expression) {
+        current_ = parse_expression(current_);
+        if(CPPTOML_NULL == current_) {
             return false;
         }
-        current_ = skip_newline(expression);
+        current_ = skip_newline(current_);
     }
     return end_ <= current_;
 }
@@ -191,6 +188,11 @@ bool TomlParser::is_basicchar(Char c)
         return true;
     }
     return false;
+}
+
+bool TomlParser::is_newline(Char c)
+{
+    return 0x0AU == c || 0x0DU == c;
 }
 
 bool TomlParser::is_quated_key(Char c)
@@ -346,17 +348,19 @@ TomlParser::cursor TomlParser::parse_expression(cursor str)
         if(CPPTOML_NULL == str) {
             return str;
         }
-        str = skip_spaces(str);
-
     } else if(is_table(*str)) {
         str = parse_table(str);
         if(CPPTOML_NULL == str) {
             return str;
         }
-        str = skip_spaces(str);
     }
+    str = skip_spaces(str);
     str = skip_comment(str);
-    return str;
+    if(end_ <= str || is_newline(str[0])) {
+        return str;
+    } else {
+        return CPPTOML_NULL;
+    }
 }
 
 TomlParser::cursor TomlParser::parse_keyval(cursor str)
@@ -379,10 +383,9 @@ TomlParser::cursor TomlParser::parse_keyval(cursor str)
 TomlParser::cursor TomlParser::parse_key(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    CPPTOML_ASSERT(is_quated_key(*str) || is_unquated_key(*str));
-    if(is_quated_key(*str)) {
+    if(is_quated_key(str[0])) {
         str = parse_quated_key(str);
-    } else if(is_unquated_key(*str)) {
+    } else if(is_unquated_key(str[0])) {
         str = parse_unquated_key(str);
     } else {
         return CPPTOML_NULL;
@@ -497,10 +500,10 @@ TomlParser::cursor TomlParser::parse_unquated_key(cursor str)
 
 TomlParser::cursor TomlParser::parse_basic_string(cursor str)
 {
-    CPPTOML_ASSERT(0x22U == *str);
+    CPPTOML_ASSERT(0x22U == str[0]);
     ++str;
     while(str < end_) {
-        if(0x22U == *str) {
+        if(0x22U == str[0]) {
             ++str;
             return str;
         }
@@ -639,13 +642,14 @@ TomlParser::cursor TomlParser::parse_8HEXDIG(cursor str)
 
 TomlParser::cursor TomlParser::parse_literal_string(cursor str)
 {
-    CPPTOML_ASSERT(0x27U == *str);
+    CPPTOML_ASSERT(0x27U == str[0]);
+    ++str;
     while(str < end_) {
-        if(0x27U == *str) {
+        if(0x27U == str[0]) {
             ++str;
             return str;
         }
-        str = parse_basic_char(str);
+        str = parse_literal_char(str);
         if(CPPTOML_NULL == str) {
             break;
         }
@@ -715,17 +719,20 @@ TomlParser::cursor TomlParser::parse_ml_basic_body(cursor str)
     for(;;) {
         cursor quotes = parse_mlb_quotes(str);
         if(CPPTOML_NULL == quotes) {
-            return CPPTOML_NULL;
-        }
-        if(str == quotes) {
-            return str;
+            break;
         }
         str = quotes;
         cursor content = parse_mlb_content(str);
         if(CPPTOML_NULL == content) {
             return CPPTOML_NULL;
         }
-        str = content;
+        for(;;) {
+            content = parse_mlb_content(str);
+            if(CPPTOML_NULL == content) {
+                break;
+            }
+            str = content;
+        }
     }
     {
         cursor quotes = parse_mlb_quotes(str);
@@ -738,42 +745,31 @@ TomlParser::cursor TomlParser::parse_ml_basic_body(cursor str)
 
 TomlParser::cursor TomlParser::parse_mlb_quotes(cursor str)
 {
-    if(end_ <= (str + 2) || 0x22U != str[0] || 0x22U != str[1]) {
-        return CPPTOML_NULL;
-    }
-    cursor quote = str + 2;
-    for(;;) {
-        if(end_ <= (quote + 2)) {
-            if(0x22U == quote[0] && 0x22U == quote[1]) {
-                quote += 2;
-                continue;
-            } else if(0x22U != quote[0]) {
-                return quote;
-            }
-            return str;
-        } else if(end_ <= (quote + 1)) {
-            return str;
-        } else if(end_ <= quote) {
-            return CPPTOML_NULL;
-        } else {
-            return str;
+    u32 count = 0;
+    while(str < end_) {
+        if(0x22U != str[0]) {
+            break;
         }
+        ++count;
+        ++str;
     }
-    return str;
+    return 1 <= count && count <= 2 ? str : CPPTOML_NULL;
 }
 
 TomlParser::cursor TomlParser::parse_mlb_content(cursor str)
 {
-    cursor content = parse_basic_char(str);
-    if(CPPTOML_NULL != content) {
-        str = content;
+    if(end_ <= str) {
+        return CPPTOML_NULL;
     }
-    str = skip_newline(str);
-    content = parse_mlb_escaped_nl(str);
-    if(CPPTOML_NULL != content) {
-        str = content;
+    switch(str[0]) {
+    case 0x0AU:
+    case 0x0DU:
+        return skip_newline(str);
+    case 0x5CU:
+        return parse_mlb_escaped_nl(str);
+    default:
+        return parse_basic_char(str);
     }
-    return str;
 }
 
 TomlParser::cursor TomlParser::parse_mlb_escaped_nl(cursor str)
@@ -835,15 +831,18 @@ TomlParser::cursor TomlParser::parse_ml_literal_body(cursor str)
         if(CPPTOML_NULL == quotes) {
             break;
         }
-        if(str == quotes) {
-            return str;
-        }
         str = quotes;
         cursor content = parse_mll_content(str);
         if(CPPTOML_NULL == content) {
             return CPPTOML_NULL;
         }
-        str = content;
+        for(;;) {
+            content = parse_mll_content(str);
+            if(CPPTOML_NULL == content) {
+                break;
+            }
+            str = content;
+        }
     }
     {
         cursor quotes = parse_mll_quotes(str);
@@ -856,36 +855,27 @@ TomlParser::cursor TomlParser::parse_ml_literal_body(cursor str)
 
 TomlParser::cursor TomlParser::parse_mll_quotes(cursor str)
 {
-    if(end_ <= (str + 2) || 0x27U != str[0] || 0x27U != str[1]) {
-        return CPPTOML_NULL;
-    }
-    cursor quote = str + 2;
-    for(;;) {
-        if(end_ <= (quote + 2)) {
-            if(0x27U == quote[0] && 0x27U == quote[1]) {
-                quote += 2;
-                continue;
-            } else if(0x27U != quote[0]) {
-                return quote;
-            }
-            return str;
-        } else if(end_ <= (quote + 1)) {
-            return str;
-        } else if(end_ <= quote) {
-            return CPPTOML_NULL;
-        } else {
-            return str;
+    u32 count = 0;
+    while(str < end_) {
+        if(0x27U != str[0]) {
+            break;
         }
+        ++count;
+        ++str;
     }
+    return 1 <= count && count <= 2 ? str : CPPTOML_NULL;
 }
 
 TomlParser::cursor TomlParser::parse_mll_content(cursor str)
 {
-    cursor content = parse_literal_char(str);
-    if(CPPTOML_NULL != content) {
-        str = content;
+    CPPTOML_ASSERT(str < end_);
+    switch(str[0]) {
+    case 0x0AU:
+    case 0x0DU:
+        return skip_newline(str);
+    default:
+        return parse_literal_char(str);
     }
-    return skip_newline(str);
 }
 
 TomlParser::cursor TomlParser::parse_boolean(cursor str)
@@ -1000,7 +990,7 @@ TomlParser::cursor TomlParser::parse_inline_table_keyvals(cursor str)
     if(end_ <= str) {
         return str;
     }
-if(!is_quated_key(str[0]) && !is_unquated_key(str[0])){
+    if(!is_quated_key(str[0]) && !is_unquated_key(str[0])) {
         return str;
     }
     str = parse_keyval(str);
@@ -1571,20 +1561,19 @@ TomlParser::cursor TomlParser::parse_std_table(cursor str)
     CPPTOML_ASSERT(str < end_);
     CPPTOML_ASSERT(is_table(str[0]));
     ++str;
-    while(str < end_) {
-        str = skip_spaces(str);
-        if(end_ <= str) {
-            break;
-        }
-        if(0x5DU == str[0]) {
-            return str + 1;
-        }
-        str = parse_key(str);
-        if(CPPTOML_NULL == str) {
-            break;
-        }
+    str = skip_spaces(str);
+    if(end_ <= str) {
+        return CPPTOML_NULL;
     }
-    return CPPTOML_NULL;
+    str = parse_key(str);
+    if(CPPTOML_NULL == str) {
+        return CPPTOML_NULL;
+    }
+    str = skip_spaces(str);
+    if(end_ <= str) {
+        return CPPTOML_NULL;
+    }
+    return 0x5DU == str[0] ? str + 1 : CPPTOML_NULL;
 }
 
 TomlParser::cursor TomlParser::parse_array_table(cursor str)
@@ -1592,22 +1581,20 @@ TomlParser::cursor TomlParser::parse_array_table(cursor str)
     CPPTOML_ASSERT((str + 1) < end_);
     CPPTOML_ASSERT(is_table(str[0]) && is_table(str[1]));
     str += 2;
-    while(str < end_) {
-        str = skip_spaces(str);
-        if(end_ <= str) {
-            break;
-        }
-        if(0x5DU == str[0]) {
-            if(end_ <= (str + 1) || 0x5DU != str[1]) {
-                break;
-            }
-            return str + 2;
-        }
-        str = parse_key(str);
-        if(CPPTOML_NULL == str) {
-            break;
-        }
+    str = skip_spaces(str);
+    str = parse_key(str);
+    if(CPPTOML_NULL == str) {
+        return CPPTOML_NULL;
     }
-    return CPPTOML_NULL;
+
+    str = skip_spaces(str);
+    if(end_ <= str || 0x5DU != str[0]) {
+        return CPPTOML_NULL;
+    }
+    ++str;
+    if(end_ <= str || 0x5DU != str[0]) {
+        return CPPTOML_NULL;
+    }
+    return str + 1;
 }
 CPPTOML_NAMESPAFCE_END

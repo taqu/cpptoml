@@ -8,7 +8,7 @@ project(${ProjectName})
 ########################################################################
 # Sources
 set(HEADERS "../cpptoml.h")
-set(SOURCES "../cpptoml.cpp;main.cpp;test_valid.cpp")
+set(SOURCES "../cpptoml.cpp;main.cpp;test.cpp")
 
 source_group("include" FILES ${HEADERS})
 source_group("src" FILES ${SOURCES})
