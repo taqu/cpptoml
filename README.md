@@ -1,8 +1,8 @@
 # cpptoml
 This is WIP.
 
-Minimal implementation for [Tom's Obvious, Minimal Language v1.0.0-rc.3](https://toml.io/en/v1.0.0-rc.3).
-"Minimal" means that I don't need kindful supports like, friendness for STL, error messages for incorrects, many allocations.
+Minimal implementation for [Tom's Obvious, Minimal Language v1.0.0](https://toml.io/en/v1.0.0).
+"Minimal" means that this doesn't have kindful supports like, friendness for STL, error messages for incorrects, many allocations.
 
 # Usage
 

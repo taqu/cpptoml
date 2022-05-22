@@ -57,18 +57,10 @@ For more information, please refer to <http://unlicense.org>
 @author t-sakai
 */
 #include <cstdint>
+#include <ctime>
 
-#ifdef __cplusplus
-#    define CPPTOML_NAMESPAFCE_BEGIN \
-        namespace cpptoml \
-        {
-#    define CPPTOML_NAMESPAFCE_END }
-#else
-#    define CPPTOML_NAMESPAFCE_BEGIN
-#    define CPPTOML_NAMESPAFCE_END
-#endif
-
-CPPTOML_NAMESPAFCE_BEGIN
+namespace cpptoml
+{
 
 #ifndef CPPTOML_TYPES
 #    define CPPTOML_TYPES
@@ -110,58 +102,186 @@ using UChar = unsigned char;
 #    endif
 #endif // CPPTOML_NULL
 
-typedef void* (*cpptoml_malloc)(size_t);
-typedef void (*cpptoml_free)(void*);
+typedef void* (*cpptoml_malloc)(size_t, void*);
+typedef void (*cpptoml_free)(void*, void*);
 
-enum CppTomlType
+static constexpr u16 Invalid = 0xFFFFU;
+
+class TomlParser;
+
+//--- TomlType
+//---------------------------------------
+enum class TomlType : u16
 {
-    CppTomlType_None = 0,
-    CppTomlType_Object,
-    CppTomlType_Array,
-    CppTomlType_String,
-    CppTomlType_Number,
-    CppTomlType_Integer,
-    CppTomlType_Boolean,
-    CppTomlType_Null,
-    CppTomlType_KeyValue,
+    None = 0,
+    Table,
+    Array,
+    ArrayTable,
+    String,
+    DateTime,
+    Float,
+    Integer,
+    Boolean,
+    Key,
+    KeyValue,
 };
 
-struct CppTomlResult
+struct TomlTable
 {
-    bool success_;
-    u32 index_;
+    u16 size_;
+    u16 head_;
 };
 
-struct CppTomlObject
+struct TomlArray
 {
-    u32 size_;
-    u32 head_;
+    u16 size_;
+    u16 head_;
 };
 
-struct CppTomlArray
+struct TomlKeyValue
 {
-    u32 size_;
-    u32 head_;
+    u16 key_;
+    u16 value_;
 };
 
-struct CppTomlKeyValue
+struct TomlValue
 {
+    u32 position_;
+    u32 length_;
+    u16 next_;
+    TomlType type_;
+    union
+    {
+        TomlTable table_;
+        TomlArray array_;
+        TomlKeyValue keyvalue_;
+    };
+};
+
+//--- TomlProxy
+//---------------------------------------
+struct TomlStringProxy
+{
+    bool valid_;
+    u32 length_;
+    const char* str_;
+};
+
+struct TomlDateTimeProxy
+{
+    enum class Type : s8
+    {
+        OffsetDateTime,
+        LocalDateTime,
+        LocalDate,
+        LocalTime,
+    };
+
+    bool valid_;
+    Type type_;
+    s32 year_;
+    s32 month_;
+    s32 day_;
+    s32 hour_;
+    s32 minute_;
+    s32 second_;
+    s32 millisecond_;
+    s32 offset_; //!< an UTC offset
+};
+
+struct TomlFloatProxy
+{
+    bool valid_;
+    f64 value_;
+};
+
+struct TomlIntProxy
+{
+    bool valid_;
+    s64 value_;
+};
+
+struct TomlBoolProxy
+{
+    bool valid_;
+    bool value_;
+};
+
+class TomlValueProxy
+{
+public:
+    TomlType type() const;
+    template<class T>
+    T value() const {}
+
+private:
+    friend class TomlKeyValueProxy;
+    friend class TomlArrayProxy;
+
+    const TomlParser* parser_;
+    u32 value_;
+};
+
+class TomlKeyValueProxy
+{
+public:
+    TomlStringProxy key() const;
+    TomlValueProxy value() const;
+
+private:
+    friend class TomlTableProxy;
+
+    const TomlParser* parser_;
     u32 key_;
     u32 value_;
 };
 
-struct CppTomlValue
+class TomlArrayProxy
 {
-    u32 position_;
-    u32 length_;
-    u32 next_;
-    CppTomlType type_;
-    union
+public:
+    using Iterator = u32;
+
+    u32 size() const;
+    Iterator begin() const;
+    Iterator next(Iterator iterator) const;
+    Iterator end() const;
+    TomlValueProxy operator[](Iterator iterator) const;
+
+private:
+    friend class TomlValueProxy;
+
+    TomlArrayProxy(const TomlParser* parser, u32 index)
+        : parser_(parser)
+        , index_(index)
     {
-        CppTomlObject object_;
-        CppTomlArray array_;
-        CppTomlKeyValue key_value_;
-    };
+    }
+    const TomlParser* parser_;
+    u32 index_;
+};
+
+class TomlTableProxy
+{
+public:
+    using Iterator = u32;
+
+    u32 size() const;
+    Iterator begin() const;
+    Iterator next(Iterator iterator) const;
+    Iterator end() const;
+    TomlKeyValueProxy operator[](Iterator iterator) const;
+
+private:
+    friend class TomlValueProxy;
+    friend class TomlParser;
+
+    TomlTableProxy(const TomlParser* parser, u32 index)
+        : parser_(parser)
+        , index_(index)
+    {
+    }
+
+    const TomlParser* parser_;
+    u32 index_;
 };
 
 //--- TomlParser
@@ -169,37 +289,30 @@ struct CppTomlValue
 class TomlParser
 {
 public:
+    static constexpr u32 MaxNests = 64;
+    static constexpr u32 ExpandSize = 4 * 4096;
     using cursor = const UChar*;
 
-    TomlParser(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL);
+    TomlParser(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL, void* user_data = CPPTOML_NULL);
     ~TomlParser();
 
     bool parse(cursor head, cursor end);
-    u32 size() const;
+    void clear();
+    TomlTableProxy top() const;
 
 private:
     TomlParser(const TomlParser&) = delete;
     TomlParser& operator=(const TomlParser&) = delete;
 
-    struct Buffer
+    friend class TomlValueProxy;
+    friend class TomlKeyValueProxy;
+    friend class TomlArrayProxy;
+    friend class TomlTableProxy;
+
+    struct Result
     {
-    public:
-        static constexpr u32 ExpandSize = 4 * 4096;
-
-        Buffer(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL);
-        ~Buffer();
-
-        u32 capacity() const;
-        u32 size() const;
-        void clear();
-
-    private:
-        Buffer(const Buffer&) = delete;
-        Buffer& operator=(const Buffer&) = delete;
-        cpptoml_malloc allocator_;
-        cpptoml_free deallocator_;
-        u32 capacity_;
-        u32 size_;
+        cursor cursor_;
+        u32 index_;
     };
 
     static bool is_alpha(Char c);
@@ -228,12 +341,12 @@ private:
     cursor parse_keyval(cursor str);
     cursor parse_table(cursor str);
 
-    cursor parse_key(cursor str);
+    Result parse_key(cursor str);
     cursor parse_quated_key(cursor str);
     cursor parse_unquated_key(cursor str);
     cursor parse_dot_sep(cursor str);
     cursor parse_keyval_sep(cursor str);
-    cursor parse_val(cursor str);
+    Result parse_val(cursor str);
     cursor parse_basic_string(cursor str);
     cursor parse_basic_char(cursor str);
     cursor parse_non_ascii(cursor str);
@@ -258,7 +371,7 @@ private:
     cursor parse_boolean(cursor str);
 
     cursor parse_array(cursor str);
-    cursor parse_array_values(cursor str);
+    cursor parse_array_values(cursor str, u32 array);
     cursor parse_ws_comment_newline(cursor str);
 
     cursor parse_inline_table(cursor str);
@@ -299,13 +412,62 @@ private:
     cursor parse_std_table(cursor str);
     cursor parse_array_table(cursor str);
 
+    u32 length(cursor begin, cursor end) const;
+    u32 create_value(cursor begin, cursor end, TomlType type);
+    u32 create_key(cursor begin, cursor end);
+    u32 create_keyvalue(u32 key, u32 value);
+    u32 create_table(cursor begin, cursor end, bool array_table);
+    u32 create_array(cursor begin, cursor end);
+    u32 create_string(cursor begin, cursor end);
+
+    const TomlValue& get(u32 index) const;
+    TomlValue& get(u32 index);
+    const char* str(u32 position) const;
+    u32 allocate();
+    void reset_table();
+    void push_table(u32 table);
+    bool is_in_array_table() const;
+    void add_table_value(u32 table, u32 value);
+    void add_array_value(u32 array, u32 value);
+
+    TomlStringProxy get_string(u32 value) const;
+    TomlDateTimeProxy get_datetime(u32 value) const;
+    TomlFloatProxy get_float(u32 value) const;
+    TomlIntProxy get_int(u32 value) const;
+    TomlBoolProxy get_bool(u32 value) const;
+
     cpptoml_malloc allocator_;
     cpptoml_free deallocator_;
-    cursor begin_ = CPPTOML_NULL;
-    cursor current_ = CPPTOML_NULL;
-    cursor end_ = CPPTOML_NULL;
-    Buffer buffer_;
+    void* user_data_;
+    cursor begin_;
+    cursor current_;
+    cursor end_;
+
+    u32 capacity_;
+    u32 size_;
+    TomlValue* buffer_;
+    u32 table_;
 };
 
-CPPTOML_NAMESPAFCE_END
+template<>
+TomlStringProxy TomlValueProxy::value<TomlStringProxy>() const;
+
+template<>
+TomlDateTimeProxy TomlValueProxy::value<TomlDateTimeProxy>() const;
+
+template<>
+TomlFloatProxy TomlValueProxy::value<TomlFloatProxy>() const;
+
+template<>
+TomlIntProxy TomlValueProxy::value<TomlIntProxy>() const;
+
+template<>
+TomlBoolProxy TomlValueProxy::value<TomlBoolProxy>() const;
+
+template<>
+TomlArrayProxy TomlValueProxy::value<TomlArrayProxy>() const;
+
+template<>
+TomlTableProxy TomlValueProxy::value<TomlTableProxy>() const;
+} // namespace cpptoml
 #endif // INC_CPPTOML_H_
