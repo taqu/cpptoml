@@ -233,7 +233,7 @@ bool TomlParser::is_digit(UChar c)
 
 bool TomlParser::is_hexdigit(UChar c)
 {
-    return is_digit(c) || (0x65U <= c && c <= 0x70U);
+    return is_digit(c) || (0x41U <= c && c <= 0x46U) || (0x61U <= c && c <= 0x66U);
 }
 
 bool TomlParser::is_digit19(UChar c)

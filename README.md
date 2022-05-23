@@ -1,7 +1,7 @@
 # cpptoml
 This is WIP.
 
-Minimal implementation for [Tom's Obvious, Minimal Language v1.0.0](https://toml.io/en/v1.0.0).
+A minimal reader of [Tom's Obvious, Minimal Language v1.0.0](https://toml.io/en/v1.0.0).
 "Minimal" means that this doesn't have kindful supports like, friendness for STL, error messages for incorrects, many allocations.
 
 # Usage

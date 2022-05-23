@@ -339,6 +339,7 @@ TEST_CASE("TestToml::InValid")
     directory.close();
 }
 
+#if 0
 TEST_CASE("TestToml::PrintValues")
 {
     std::string path;
@@ -350,3 +351,4 @@ TEST_CASE("TestToml::PrintValues")
     result = test_toml(path.c_str(), true);
     EXPECT_TRUE(result);
 }
+#endif
