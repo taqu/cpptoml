@@ -1,6 +1,6 @@
 #ifndef INC_CATCH_WRAP_HPP
 #define INC_CATCH_WRAP_HPP
-#include "catch.hpp"
+#include "catch_amalgamated.hpp"
 #include <iostream>
 
 namespace util

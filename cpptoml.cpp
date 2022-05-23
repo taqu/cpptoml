@@ -55,8 +55,9 @@ For more information, please refer to <http://unlicense.org>
 @author t-sakai
 */
 #include "cpptoml.h"
-#include <charconv>
+#include <cstring>
 #include <cstdlib>
+#include <charconv>
 #include <iterator>
 
 #ifdef CPPTOML_DEBUG
@@ -197,6 +198,7 @@ bool TomlParser::parse(cursor head, cursor end)
     {
         u32 index = create_table(begin_, end_, false);
         CPPTOML_ASSERT(0 == index);
+        (void)index;
         reset_table();
     }
     while(current_ < end_) {
@@ -219,58 +221,58 @@ TomlTableProxy TomlParser::top() const
     return {this, table_};
 }
 
-bool TomlParser::is_alpha(Char c)
+bool TomlParser::is_alpha(UChar c)
 {
     return (0x41U <= c && c <= 0x5AU) || (0x61U <= c && c <= 0x7AU);
 }
 
-bool TomlParser::is_digit(Char c)
+bool TomlParser::is_digit(UChar c)
 {
     return 0x30U <= c && c <= 0x39U;
 }
 
-bool TomlParser::is_hexdigit(Char c)
+bool TomlParser::is_hexdigit(UChar c)
 {
-    return is_digit(c) || ('A' <= c && c <= 'F');
+    return is_digit(c) || (0x65U <= c && c <= 0x70U);
 }
 
-bool TomlParser::is_digit19(Char c)
+bool TomlParser::is_digit19(UChar c)
 {
     return 0x31U <= c && c <= 0x39U;
 }
 
-bool TomlParser::is_digit07(Char c)
+bool TomlParser::is_digit07(UChar c)
 {
     return 0x30U <= c && c <= 0x37U;
 }
 
-bool TomlParser::is_digit01(Char c)
+bool TomlParser::is_digit01(UChar c)
 {
     return 0x30U <= c && c <= 0x31U;
 }
 
-bool TomlParser::is_whitespace(Char c)
+bool TomlParser::is_whitespace(UChar c)
 {
     return 0x20U == c || 0x09U == c;
 }
 
-bool TomlParser::is_basicchar(Char c)
+bool TomlParser::is_basicchar(UChar c)
 {
     if(is_whitespace(c)
        || 0x21U == c
-       || 0x23U <= c && c <= 0x5BU
-       || 0x5DU <= c && c <= 0x7EU) {
+       || (0x23U <= c && c <= 0x5BU)
+       || (0x5DU <= c && c <= 0x7EU)) {
         return true;
     }
     return false;
 }
 
-bool TomlParser::is_newline(Char c)
+bool TomlParser::is_newline(UChar c)
 {
     return 0x0AU == c || 0x0DU == c;
 }
 
-bool TomlParser::is_quated_key(Char c)
+bool TomlParser::is_quated_key(UChar c)
 {
     if(0x22U == c
        || 0x27U == c) {
@@ -279,7 +281,7 @@ bool TomlParser::is_quated_key(Char c)
     return false;
 }
 
-bool TomlParser::is_unquated_key(Char c)
+bool TomlParser::is_unquated_key(UChar c)
 {
     if(is_alpha(c)
        || is_digit(c)
@@ -290,7 +292,7 @@ bool TomlParser::is_unquated_key(Char c)
     return false;
 }
 
-bool TomlParser::is_table(Char c)
+bool TomlParser::is_table(UChar c)
 {
     return 0x5BU == c;
 }
@@ -336,7 +338,7 @@ TomlParser::cursor TomlParser::skip_newline(cursor str)
 TomlParser::cursor TomlParser::skip_spaces(cursor str)
 {
     while(str < end_) {
-        switch(*str) {
+        switch(str[0]) {
         case 0x09U:
         case 0x20U:
             ++str;
@@ -357,7 +359,7 @@ TomlParser::cursor TomlParser::skip_utf8_1(cursor str)
         return CPPTOML_NULL;
     }
     ++str;
-    return value0 == (*str & mask0) ? str : end_;
+    return value0 == (str[0] & mask0) ? str : end_;
 }
 
 TomlParser::cursor TomlParser::skip_utf8_2(cursor str)
@@ -369,11 +371,11 @@ TomlParser::cursor TomlParser::skip_utf8_2(cursor str)
         return CPPTOML_NULL;
     }
     ++str;
-    if(value0 != (*str & mask0)) {
+    if(value0 != (str[0] & mask0)) {
         return CPPTOML_NULL;
     }
     ++str;
-    return value0 == (*str & mask0) ? str : end_;
+    return value0 == (str[0] & mask0) ? str : end_;
 }
 
 TomlParser::cursor TomlParser::skip_utf8_3(cursor str)
@@ -385,20 +387,20 @@ TomlParser::cursor TomlParser::skip_utf8_3(cursor str)
         return CPPTOML_NULL;
     }
     ++str;
-    if(value0 != (*str & mask0)) {
+    if(value0 != (str[0] & mask0)) {
         return CPPTOML_NULL;
     }
     ++str;
-    if(value0 != (*str & mask0)) {
+    if(value0 != (str[0] & mask0)) {
         return CPPTOML_NULL;
     }
     ++str;
-    return value0 == (*str & mask0) ? str : end_;
+    return value0 == (str[0] & mask0) ? str : end_;
 }
 
 TomlParser::cursor TomlParser::skip_comment(cursor str)
 {
-    if(end_ <= str || '#' != *str) {
+    if(end_ <= str || '#' != str[0]) {
         return str;
     }
     ++str;
@@ -418,12 +420,12 @@ TomlParser::cursor TomlParser::parse_expression(cursor str)
     if(end_ <= str) {
         return str;
     }
-    if(is_quated_key(*str) || is_unquated_key(*str)) {
+    if(is_quated_key(str[0]) || is_unquated_key(str[0])) {
         str = parse_keyval(str);
         if(CPPTOML_NULL == str) {
             return str;
         }
-    } else if(is_table(*str)) {
+    } else if(is_table(str[0])) {
         reset_table();
         str = parse_table(str);
         if(CPPTOML_NULL == str) {
@@ -485,7 +487,7 @@ TomlParser::Result TomlParser::parse_key(cursor str)
 TomlParser::cursor TomlParser::parse_dot_sep(cursor str)
 {
     str = skip_spaces(str);
-    if(end_ <= str || 0x2EU != *str) {
+    if(end_ <= str || 0x2EU != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
@@ -496,7 +498,7 @@ TomlParser::cursor TomlParser::parse_dot_sep(cursor str)
 TomlParser::cursor TomlParser::parse_keyval_sep(cursor str)
 {
     str = skip_spaces(str);
-    if(end_ <= str || 0x3DU != *str) {
+    if(end_ <= str || 0x3DU != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
@@ -557,12 +559,12 @@ TomlParser::Result TomlParser::parse_val(cursor str)
 TomlParser::cursor TomlParser::parse_quated_key(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x22U == *str) {
+    if(0x22U == str[0]) {
         cursor next = parse_basic_string(str);
         if(CPPTOML_NULL != next) {
             return next;
         }
-    } else if(0x27U == *str) {
+    } else if(0x27U == str[0]) {
         cursor next = parse_literal_string(str);
         if(CPPTOML_NULL != next) {
             return next;
@@ -576,10 +578,10 @@ TomlParser::cursor TomlParser::parse_unquated_key(cursor str)
     CPPTOML_ASSERT(str < end_);
     cursor begin = str;
     while(str < end_) {
-        if(is_alpha(*str)
-           || is_digit(*str)
-           || 0x2DU == *str
-           || 0x5FU == *str) {
+        if(is_alpha(str[0])
+           || is_digit(str[0])
+           || 0x2DU == str[0]
+           || 0x5FU == str[0]) {
             ++str;
         } else {
             break;
@@ -608,13 +610,13 @@ TomlParser::cursor TomlParser::parse_basic_string(cursor str)
 TomlParser::cursor TomlParser::parse_basic_char(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x5CU == *str) {
+    if(0x5CU == str[0]) {
         return parse_escaped(str);
     }
-    if(is_whitespace(*str)
-       || 0x21U == *str
-       || 0x23U <= *str && *str <= 0x5BU
-       || 0x5DU <= *str && *str <= 0x7EU) {
+    if(is_whitespace(str[0])
+       || 0x21U == str[0]
+       || (0x23U <= str[0] && str[0] <= 0x5BU)
+       || (0x5DU <= str[0] && str[0] <= 0x7EU)) {
         ++str;
         return str;
     }
@@ -631,7 +633,7 @@ TomlParser::cursor TomlParser::parse_non_ascii(cursor str)
     static const u8 value2 = 0b11100000U;
     static const u8 value3 = 0b11110000U;
 
-    if(value1 == (*str & mask1)) {
+    if(value1 == (str[0] & mask1)) {
         str = skip_utf8_1(str);
         if(CPPTOML_NULL == str) {
             return CPPTOML_NULL;
@@ -658,9 +660,9 @@ TomlParser::cursor TomlParser::parse_non_ascii(cursor str)
 TomlParser::cursor TomlParser::parse_non_eol(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x09U == *str) {
+    if(0x09U == str[0]) {
         ++str;
-    } else if(0x20U <= *str && *str <= 0x7FU) {
+    } else if(0x20U <= str[0] && str[0] <= 0x7FU) {
         ++str;
     } else {
         str = parse_non_ascii(str);
@@ -671,12 +673,12 @@ TomlParser::cursor TomlParser::parse_non_eol(cursor str)
 TomlParser::cursor TomlParser::parse_escaped(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    CPPTOML_ASSERT(0x5CU == *str);
+    CPPTOML_ASSERT(0x5CU == str[0]);
     ++str;
     if(end_ <= str) {
         return CPPTOML_NULL;
     }
-    switch(*str) {
+    switch(str[0]) {
     case 0x22U:
     case 0x5CU:
     case 0x62U:
@@ -702,7 +704,7 @@ TomlParser::cursor TomlParser::parse_escaped(cursor str)
 
 TomlParser::cursor TomlParser::parse_4HEXDIG(cursor str)
 {
-    CPPTOML_ASSERT(0x75U == *str);
+    CPPTOML_ASSERT(0x75U == str[0]);
     ++str;
     if(end_ <= (str + 4)) {
         return CPPTOML_NULL;
@@ -717,7 +719,7 @@ TomlParser::cursor TomlParser::parse_4HEXDIG(cursor str)
 
 TomlParser::cursor TomlParser::parse_8HEXDIG(cursor str)
 {
-    CPPTOML_ASSERT(0x55U == *str);
+    CPPTOML_ASSERT(0x55U == str[0]);
     ++str;
     if(end_ <= (str + 8)) {
         return CPPTOML_NULL;
@@ -750,9 +752,9 @@ TomlParser::cursor TomlParser::parse_literal_string(cursor str)
 TomlParser::cursor TomlParser::parse_literal_char(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x09U == *str
-       || 0x20U <= *str && *str <= 0x26U
-       || 0x28U <= *str && *str <= 0x7EU) {
+    if(0x09U == str[0]
+       || (0x20U <= str[0] && str[0] <= 0x26U)
+       || (0x28U <= str[0] && str[0] <= 0x7EU)) {
         ++str;
         return str;
     }
@@ -762,14 +764,14 @@ TomlParser::cursor TomlParser::parse_literal_char(cursor str)
 TomlParser::cursor TomlParser::parse_string(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x22U == *str) {
+    if(0x22U == str[0]) {
         if((str + 2) < end_ && 0x22U == str[1] && 0x22U == str[2]) {
             return parse_ml_basic_string(str);
         } else {
             return parse_basic_string(str);
         }
     }
-    if(0x27U == *str) {
+    if(0x27U == str[0]) {
         if((str + 2) < end_ && 0x27U == str[1] && 0x27U == str[2]) {
             return parse_ml_literal_string(str);
         } else {
@@ -867,7 +869,7 @@ TomlParser::cursor TomlParser::parse_mlb_escaped_nl(cursor str)
     if(end_ <= str) {
         return CPPTOML_NULL;
     }
-    if(0x5CU != *str) {
+    if(0x5CU != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
@@ -875,7 +877,7 @@ TomlParser::cursor TomlParser::parse_mlb_escaped_nl(cursor str)
     str = skip_newline(str);
 
     while(str < end_) {
-        switch(*str) {
+        switch(str[0]) {
         case 0x09U:
         case 0x20U:
         case 0x0AU:
@@ -971,13 +973,13 @@ TomlParser::cursor TomlParser::parse_mll_content(cursor str)
 TomlParser::cursor TomlParser::parse_boolean(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x74U == *str) {
+    if(0x74U == str[0]) {
         if((str + 4) < end_ && 0x72U == str[1] && 0x75U == str[2] && 0x65U == str[3]) {
             return str + 4;
         }
         return CPPTOML_NULL;
     }
-    if(0x66U == *str) {
+    if(0x66U == str[0]) {
         if((str + 5) < end_ && 0x61U == str[1] && 0x6CU == str[2] && 0x73U == str[3] && 0x65U == str[4]) {
             return str + 5;
         }
@@ -989,7 +991,7 @@ TomlParser::cursor TomlParser::parse_boolean(cursor str)
 TomlParser::cursor TomlParser::parse_array(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x5BU != *str) {
+    if(0x5BU != str[0]) {
         return CPPTOML_NULL;
     }
     cursor begin = str;
@@ -1035,7 +1037,7 @@ TomlParser::cursor TomlParser::parse_array_values(cursor str, u32 array)
 TomlParser::cursor TomlParser::parse_ws_comment_newline(cursor str)
 {
     while(str < end_) {
-        switch(*str) {
+        switch(str[0]) {
         case 0x09U:
         case 0x20U:
             ++str;
@@ -1061,7 +1063,7 @@ TomlParser::cursor TomlParser::parse_ws_comment_newline(cursor str)
 TomlParser::cursor TomlParser::parse_inline_table(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    if(0x7BU != *str) {
+    if(0x7BU != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
@@ -1092,7 +1094,7 @@ TomlParser::cursor TomlParser::parse_inline_table_keyvals(cursor str)
         return str;
     }
     str = skip_spaces(str);
-    if(str < end_ && 0x2CU == *str) {
+    if(str < end_ && 0x2CU == str[0]) {
         ++str;
         str = skip_spaces(str);
         return parse_inline_table_keyvals(str);
@@ -1184,7 +1186,7 @@ TomlParser::cursor TomlParser::parse_time_delim(cursor str)
     if(end_ <= str) {
         return CPPTOML_NULL;
     }
-    switch(*str) {
+    switch(str[0]) {
     case 0x20U:
     case 'T':
     case 't':
@@ -1199,13 +1201,13 @@ TomlParser::cursor TomlParser::parse_time_delim(cursor str)
 TomlParser::cursor TomlParser::parse_full_date(cursor str)
 {
     str = parse_date_fullyear(str);
-    if(str == CPPTOML_NULL || end_ <= str || '-' != *str) {
+    if(str == CPPTOML_NULL || end_ <= str || '-' != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
 
     str = parse_date_month(str);
-    if(str == CPPTOML_NULL || end_ <= str || '-' != *str) {
+    if(str == CPPTOML_NULL || end_ <= str || '-' != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
@@ -1219,7 +1221,7 @@ TomlParser::cursor TomlParser::parse_full_time(cursor str)
     if(str == CPPTOML_NULL || end_ <= str) {
         return CPPTOML_NULL;
     }
-    switch(*str) {
+    switch(str[0]) {
     case 'Z':
     case 'z':
         ++str;
@@ -1228,7 +1230,7 @@ TomlParser::cursor TomlParser::parse_full_time(cursor str)
     case '-': {
         ++str;
         str = parse_time_hour(str);
-        if(str == CPPTOML_NULL || end_ <= str || ':' != *str) {
+        if(str == CPPTOML_NULL || end_ <= str || ':' != str[0]) {
             return CPPTOML_NULL;
         }
         ++str;
@@ -1241,13 +1243,13 @@ TomlParser::cursor TomlParser::parse_full_time(cursor str)
 TomlParser::cursor TomlParser::parse_partial_time(cursor str)
 {
     str = parse_time_hour(str);
-    if(str == CPPTOML_NULL || end_ <= str || ':' != *str) {
+    if(str == CPPTOML_NULL || end_ <= str || ':' != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
 
     str = parse_time_minute(str);
-    if(str == CPPTOML_NULL || end_ <= str || ':' != *str) {
+    if(str == CPPTOML_NULL || end_ <= str || ':' != str[0]) {
         return CPPTOML_NULL;
     }
     ++str;
@@ -1256,7 +1258,7 @@ TomlParser::cursor TomlParser::parse_partial_time(cursor str)
     if(str == CPPTOML_NULL || end_ <= str) {
         return str;
     }
-    if('.' == *str) {
+    if('.' == str[0]) {
         ++str;
         return parse_time_secfrac(str);
     }
@@ -2057,7 +2059,7 @@ namespace
         }
         s32 year = 0;
         for(u32 i = 0; i < 4U; ++i, ++current) {
-            if(0x30U <= current[i] && current[i] <= 0x39U) {
+            if(0x30 <= current[i] && current[i] <= 0x39) {
                 year += (3 - i) * 10 * c_decimal_int(current[i]);
                 continue;
             }

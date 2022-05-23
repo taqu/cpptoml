@@ -315,19 +315,19 @@ private:
         u32 index_;
     };
 
-    static bool is_alpha(Char c);
-    static bool is_digit(Char c);
-    static bool is_hexdigit(Char c);
-    static bool is_digit19(Char c);
-    static bool is_digit07(Char c);
-    static bool is_digit01(Char c);
-    static bool is_whitespace(Char c);
-    static bool is_basicchar(Char c);
-    static bool is_newline(Char c);
+    static bool is_alpha(UChar c);
+    static bool is_digit(UChar c);
+    static bool is_hexdigit(UChar c);
+    static bool is_digit19(UChar c);
+    static bool is_digit07(UChar c);
+    static bool is_digit01(UChar c);
+    static bool is_whitespace(UChar c);
+    static bool is_basicchar(UChar c);
+    static bool is_newline(UChar c);
 
-    static bool is_quated_key(Char c);
-    static bool is_unquated_key(Char c);
-    static bool is_table(Char c);
+    static bool is_quated_key(UChar c);
+    static bool is_unquated_key(UChar c);
+    static bool is_table(UChar c);
 
     cursor skip_bom(cursor str);
     cursor skip_newline(cursor str);

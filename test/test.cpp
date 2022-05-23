@@ -1,10 +1,98 @@
-﻿#include <Windows.h>
-
+﻿
+#ifdef _WIN32
+#    include <Windows.h>
+#else
+#    include <dirent.h>
+#    include <sys/stat.h>
+#    include <sys/types.h>
+#endif
 #include "../cpptoml.h"
 #include "catch_wrap.hpp"
 
 namespace
 {
+class Directory
+{
+public:
+    bool open(const char* path, const char* pattern);
+    void close();
+    bool next();
+
+    std::string path() const;
+
+private:
+    std::string path_;
+    std::string pattern_;
+#ifdef _WIN32
+    WIN32_FIND_DATA findFileData_;
+    HANDLE file_ = INVALID_HANDLE_VALUE;
+#else
+    DIR* directory_ = nullptr;
+    std::string name_;
+#endif
+};
+
+bool Directory::open(const char* path, const char* pattern)
+{
+    path_ = path;
+#ifdef _WIN32
+    pattern_ = "*";
+    pattern_ += pattern;
+    std::string search_string = path_ + pattern_;
+    file_ = FindFirstFileA(search_string.c_str(), &findFileData_);
+    return INVALID_HANDLE_VALUE != file_;
+#else
+    pattern_ = pattern;
+    directory_ = opendir(path_.c_str());
+    return nullptr != directory_ ? next() : false;
+#endif
+}
+
+void Directory::close()
+{
+#ifdef _WIN32
+    if(INVALID_HANDLE_VALUE != file_) {
+        FindClose(file_);
+        file_ = INVALID_HANDLE_VALUE;
+    }
+#else
+    if(nullptr != directory_) {
+        closedir(directory_);
+        directory_ = nullptr;
+    }
+#endif
+}
+
+bool Directory::next()
+{
+#ifdef _WIN32
+    return FindNextFileA(file_, &findFileData_);
+#else
+    for(;;) {
+        struct dirent* info = readdir(directory_);
+        if(nullptr == info) {
+            return false;
+        }
+        std::string name = info->d_name;
+        bool found = std::equal(std::crbegin(pattern_), std::crend(pattern_), std::crbegin(name));
+        if(found) {
+            name_ = name;
+            printf("readdir %s\n", name_.c_str());
+            return true;
+        }
+    }
+#endif
+}
+
+std::string Directory::path() const
+{
+#ifdef _WIN32
+    return path_ + findFileData_.cFileName;
+#else
+    return path_ + name_;
+#endif
+}
+
 void print(const cpptoml::TomlTableProxy& table, cpptoml::u32 indent);
 
 void put_indent(cpptoml::u32 indent)
@@ -43,7 +131,11 @@ void print(cpptoml::u32 indent, const cpptoml::TomlFloatProxy& value)
 void print(cpptoml::u32 indent, const cpptoml::TomlIntProxy& value)
 {
     put_indent(indent);
+#ifdef _WIN32
     printf("%lld", value.value_);
+#else
+    printf("%ld", value.value_);
+#endif
 }
 
 void print(cpptoml::u32 indent, const cpptoml::TomlBoolProxy& value)
@@ -136,23 +228,52 @@ void print(const cpptoml::TomlTableProxy& table, cpptoml::u32 indent)
     ::printf("}\n");
 }
 
-bool test(const CHAR* filepath, bool print_result)
+bool test_toml(const char* filepath, bool print_result)
 {
-    printf("%s\n", filepath);
-#if defined(__unix__) || defined(__linux__)
-#else
+    INFO("%s" << filepath << "\n");
+#ifdef _WIN32
     HANDLE file = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if(NULL == file) {
+    if(nullptr == file) {
         return false;
     }
     DWORD size = 0;
     size = GetFileSize(file, NULL);
+#else
+    FILE* file = fopen(filepath, "rb");
+    if(nullptr == file) {
+        return false;
+    }
+    std::size_t size;
+    {
+        int fd = fileno(file);
+        if(0 != fd) {
+            fclose(file);
+            return false;
+        }
+        struct stat s;
+        if(0 != fstat(fd, &s)) {
+            fclose(file);
+            return false;
+        }
+        size = s.st_size;
+    }
+#endif
     cpptoml::u8* buffer = reinterpret_cast<cpptoml::u8*>(::malloc(sizeof(cpptoml::u8) * size));
+
+#ifdef _WIN32
     if(!ReadFile(file, buffer, size, &size, NULL)) {
         CloseHandle(file);
         return false;
     }
     CloseHandle(file);
+#else
+
+    if(fread(buffer, size, 1, file) < 1) {
+        fclose(file);
+        return false;
+    }
+    fclose(file);
+#endif
 
     cpptoml::TomlParser parser;
     bool result = parser.parse(buffer, buffer + size);
@@ -163,41 +284,51 @@ bool test(const CHAR* filepath, bool print_result)
     }
     ::free(buffer);
     return result;
-#endif
 }
 } // namespace
 
 TEST_CASE("TestToml::Valid")
 {
-#if defined(__unix__) || defined(__linux__)
-#else
-    WIN32_FIND_DATA findFileData;
-    HANDLE file = FindFirstFileA("..\\toml-test\\tests\\valid\\*.toml", &findFileData);
-    if(INVALID_HANDLE_VALUE == file) {
+    Directory directory;
+#ifdef _WIN32
+    if(!directory.open("..\\toml-test\\tests\\valid\\", ".toml")) {
         return;
     }
+#else
+    if(!directory.open("../toml-test/tests/valid/", ".toml")) {
+        return;
+    }
+#endif
     int32_t count = 0;
-    static const int32_t skip = 10;
+    static const int32_t skip = 0;
     do {
         ++count;
-        if(count <= skip) {
+        if(count < skip) {
+            if(!directory.next()){
+                break;
+            }
             continue;
         }
-        std::string path = "..\\toml-test\\tests\\valid\\";
-        path += findFileData.cFileName;
-        EXPECT_TRUE(test(path.c_str(), false));
-    } while(FindNextFileA(file, &findFileData));
-    FindClose(file);
-#endif
+        std::string path = directory.path();
+        bool result = test_toml(path.c_str(), false);
+        EXPECT_TRUE(result);
+    } while(directory.next());
+    directory.close();
 }
 
 TEST_CASE("TestToml::InValid")
 {
-    WIN32_FIND_DATA findFileData;
-    HANDLE file = FindFirstFileA("..\\toml-test\\tests\\invalid\\*.toml", &findFileData);
-    if(INVALID_HANDLE_VALUE == file) {
+    Directory directory;
+#ifdef _WIN32
+    if(!directory.open("..\\toml-test\\tests\\invalid\\", ".toml")) {
         return;
     }
+#else
+    if(!directory.open("../toml-test/tests/invalid/", ".toml")) {
+        return;
+    }
+#endif
+
     int32_t count = 0;
     static const int32_t skip = 0;
     do {
@@ -205,18 +336,21 @@ TEST_CASE("TestToml::InValid")
         if(count <= skip) {
             continue;
         }
-        std::string path = "..\\toml-test\\tests\\invalid\\";
-        path += findFileData.cFileName;
-        EXPECT_FALSE(test(path.c_str(), false));
-    } while(FindNextFileA(file, &findFileData));
-    FindClose(file);
+        std::string path = directory.path();
+        bool result = test_toml(path.c_str(), false);
+        EXPECT_FALSE(result);
+    } while(directory.next());
+    directory.close();
 }
 
 TEST_CASE("TestToml::PrintValues")
 {
     std::string path;
-    path = "..\\toml-test\\tests\\valid\\string-simple.toml";
-    EXPECT_TRUE(test(path.c_str(), true));
-    path = "..\\toml-test\\tests\\valid\\string-with-pound.toml";
-    EXPECT_TRUE(test(path.c_str(), true));
+    path = "../toml-test/tests/valid/string-simple.toml";
+    bool result;
+    result = test_toml(path.c_str(), true);
+    EXPECT_TRUE(result);
+    path = "../toml-test/tests/valid/string-with-pound.toml";
+    result = test_toml(path.c_str(), true);
+    EXPECT_TRUE(result);
 }

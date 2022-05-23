@@ -7,8 +7,8 @@ project(${ProjectName})
 
 ########################################################################
 # Sources
-set(HEADERS "../cpptoml.h")
-set(SOURCES "../cpptoml.cpp;main.cpp;test.cpp")
+set(HEADERS "../cpptoml.h;catch_amalgamated.hpp")
+set(SOURCES "../cpptoml.cpp;main.cpp;test.cpp;catch_amalgamated.cpp")
 
 source_group("include" FILES ${HEADERS})
 source_group("src" FILES ${SOURCES})
@@ -32,7 +32,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "/MD /O2 /GL /GR- /DNDEBUG")
 
 elseif(UNIX)
-    set(DEFAULT_CXX_FLAGS "-Wall -O2 -std=c++17 -std=gnu++17 -march=native")
+    set(DEFAULT_CXX_FLAGS "-Wall -O0 -std=c++17 -std=gnu++17 -march=native")
     set(CMAKE_CXX_FLAGS "${DEFAULT_CXX_FLAGS}")
 elseif(APPLE)
 endif()
