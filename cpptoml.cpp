@@ -1673,7 +1673,7 @@ TomlParser::cursor TomlParser::parse_std_table(cursor str)
     u32 table = create_table(begin, str, false);
     add_table_value(table_, table);
     push_table(table);
-    return str;
+    return str+1;
 }
 
 TomlParser::cursor TomlParser::parse_array_table(cursor str)

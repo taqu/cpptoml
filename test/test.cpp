@@ -77,7 +77,6 @@ bool Directory::next()
         bool found = std::equal(std::crbegin(pattern_), std::crend(pattern_), std::crbegin(name));
         if(found) {
             name_ = name;
-            printf("readdir %s\n", name_.c_str());
             return true;
         }
     }
@@ -230,7 +229,7 @@ void print(const cpptoml::TomlTableProxy& table, cpptoml::u32 indent)
 
 bool test_toml(const char* filepath, bool print_result)
 {
-    INFO("%s" << filepath << "\n");
+    printf("%s\n", filepath);
 #ifdef _WIN32
     HANDLE file = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if(nullptr == file) {
@@ -246,7 +245,7 @@ bool test_toml(const char* filepath, bool print_result)
     std::size_t size;
     {
         int fd = fileno(file);
-        if(0 != fd) {
+        if(fd<0) {
             fclose(file);
             return false;
         }
@@ -304,9 +303,6 @@ TEST_CASE("TestToml::Valid")
     do {
         ++count;
         if(count < skip) {
-            if(!directory.next()){
-                break;
-            }
             continue;
         }
         std::string path = directory.path();
