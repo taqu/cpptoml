@@ -55,10 +55,11 @@ For more information, please refer to <http://unlicense.org>
 @author t-sakai
 */
 #include "cpptoml.h"
-#include <cstring>
-#include <cstdlib>
 #include <charconv>
+#include <cstdlib>
+#include <cstring>
 #include <iterator>
+#include <limits>
 
 #ifdef CPPTOML_DEBUG
 #    include <cassert>
@@ -85,13 +86,13 @@ namespace
 //---------------------------------------
 TomlType TomlValueProxy::type() const
 {
-    return parser_->get(value_).type_;
+    return parser_->get_value(value_).type_;
 }
 
 TomlStringProxy TomlKeyValueProxy::key() const
 {
-    const TomlValue& key = parser_->get(key_);
-    return {true, key.length_, parser_->str(key.position_)};
+    const TomlValue& key = parser_->get_value(key_);
+    return {true, key.positionLength_.length_, parser_->str(key.positionLength_.position_)};
 }
 
 TomlValueProxy TomlKeyValueProxy::value() const
@@ -104,17 +105,17 @@ TomlValueProxy TomlKeyValueProxy::value() const
 
 u32 TomlArrayProxy::size() const
 {
-    return parser_->get(index_).array_.size_;
+    return parser_->get_value(index_).array_.size_;
 }
 
 TomlArrayProxy::Iterator TomlArrayProxy::begin() const
 {
-    return parser_->get(index_).array_.head_;
+    return parser_->get_value(index_).array_.head_;
 }
 
 TomlArrayProxy::Iterator TomlArrayProxy::next(Iterator iterator) const
 {
-    return parser_->get(iterator).next_;
+    return parser_->get_value(iterator).next_;
 }
 
 TomlArrayProxy::Iterator TomlArrayProxy::end() const
@@ -132,17 +133,17 @@ TomlValueProxy TomlArrayProxy::operator[](Iterator iterator) const
 
 u32 TomlTableProxy::size() const
 {
-    return parser_->get(index_).table_.size_;
+    return parser_->get_value(index_).table_.size_;
 }
 
 TomlTableProxy::Iterator TomlTableProxy::begin() const
 {
-    return parser_->get(index_).table_.head_;
+    return parser_->get_value(index_).table_.head_;
 }
 
 TomlTableProxy::Iterator TomlTableProxy::next(Iterator iterator) const
 {
-    return parser_->get(iterator).next_;
+    return parser_->get_value(iterator).next_;
 }
 
 TomlTableProxy::Iterator TomlTableProxy::end() const
@@ -152,11 +153,39 @@ TomlTableProxy::Iterator TomlTableProxy::end() const
 
 TomlKeyValueProxy TomlTableProxy::operator[](Iterator iterator) const
 {
-    const TomlKeyValue& keyvalue = parser_->get(iterator).keyvalue_;
+    const TomlKeyValue& keyvalue = parser_->get_value(iterator).keyvalue_;
     TomlKeyValueProxy proxy;
     proxy.parser_ = parser_;
     proxy.key_ = keyvalue.key_;
     proxy.value_ = keyvalue.value_;
+    return proxy;
+}
+
+u32 TomlArrayTableProxy::size() const
+{
+    return parser_->get_value(index_).table_.size_;
+}
+
+TomlArrayTableProxy::Iterator TomlArrayTableProxy::begin() const
+{
+    return parser_->get_value(index_).table_.head_;
+}
+
+TomlArrayTableProxy::Iterator TomlArrayTableProxy::next(Iterator iterator) const
+{
+    return parser_->get_value(iterator).next_;
+}
+
+TomlArrayTableProxy::Iterator TomlArrayTableProxy::end() const
+{
+    return Invalid;
+}
+
+TomlValueProxy TomlArrayTableProxy::operator[](Iterator iterator) const
+{
+    TomlValueProxy proxy;
+    proxy.parser_ = parser_;
+    proxy.value_ = iterator;
     return proxy;
 }
 
@@ -196,7 +225,7 @@ bool TomlParser::parse(cursor head, cursor end)
     current_ = skip_bom(current_);
     table_ = 0;
     {
-        u32 index = create_table(begin_, end_, false);
+        u32 index = create_table();
         CPPTOML_ASSERT(0 == index);
         (void)index;
         reset_table();
@@ -208,6 +237,7 @@ bool TomlParser::parse(cursor head, cursor end)
         }
         current_ = skip_newline(current_);
     }
+    reset_table();
     return end_ <= current_;
 }
 
@@ -295,6 +325,70 @@ bool TomlParser::is_unquated_key(UChar c)
 bool TomlParser::is_table(UChar c)
 {
     return 0x5BU == c;
+}
+
+bool TomlParser::is_minus(f64 x)
+{
+    return x<0.0;
+}
+
+bool TomlParser::check_overflow(s64 x0, s64 x1, s64 x2)
+{
+    if(0<=x1 && x0<x2){
+        return false;
+    }
+    if(x1<0 && x2<x0){
+        return false;
+    }
+    return true;
+}
+
+bool TomlParser::mul(s64& x, s64 base)
+{
+    s64 t = x;
+    x *= base;
+    if(0<=t){
+        return t<=x;
+    }else{
+        return x<=t;
+    }
+}
+
+bool TomlParser::add(s64& x, s64 x0, s64 x1)
+{
+    if(0<=x0){
+    x = x0 + x1;
+    }else{
+        x = x0-x1;
+    }
+    if(0<=x0 && x<x1){
+        return false;
+    }
+    if(x0<0 && x1<x){
+        return false;
+    }
+    return true;
+}
+
+s64 TomlParser::from_digit(UChar c)
+{
+    return c-0x30U;
+}
+
+s64 TomlParser::from_hex(UChar c)
+{
+    return is_digit(c) || (0x41U <= c && c <= 0x46U) || (0x61U <= c && c <= 0x66U);
+
+    if(is_digit(c)){
+        return c-0x30U;
+    }
+    if(0x41U <= c && c <= 0x46U){
+        return c-0x41U;
+    }
+    if(0x61U <= c && c <= 0x66U){
+        return c-0x61U;
+    }
+    return 0;
 }
 
 TomlParser::cursor TomlParser::skip_bom(cursor str)
@@ -447,6 +541,10 @@ TomlParser::cursor TomlParser::parse_keyval(cursor str)
     if(CPPTOML_NULL == k.cursor_) {
         return CPPTOML_NULL;
     }
+    k.index_ = traverse_tables(k.index_, TomlType::None);
+    if(Invalid == k.index_) {
+        return CPPTOML_NULL;
+    }
     str = parse_keyval_sep(k.cursor_);
     if(CPPTOML_NULL == str) {
         return CPPTOML_NULL;
@@ -463,6 +561,7 @@ TomlParser::Result TomlParser::parse_key(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
     cursor begin = str;
+
     if(is_quated_key(str[0])) {
         str = parse_quated_key(str);
     } else if(is_unquated_key(str[0])) {
@@ -473,14 +572,16 @@ TomlParser::Result TomlParser::parse_key(cursor str)
     if(CPPTOML_NULL == str) {
         return {CPPTOML_NULL, 0};
     }
+    u32 index = create_key(begin, str);
     cursor dot_sep = parse_dot_sep(str);
     if(CPPTOML_NULL != dot_sep) {
-        u32 table = create_table(begin, str, is_in_array_table());
-        add_table_value(table_, table);
-        push_table(table);
-        return parse_key(dot_sep);
+        TomlParser::Result result = parse_key(dot_sep);
+        if(CPPTOML_NULL == result.cursor_){
+            return result;
+        }
+        str = result.cursor_;
+        get_value(index).next_ = result.index_;
     }
-    u32 index = create_key(begin, str);
     return {str, index};
 }
 
@@ -524,16 +625,15 @@ TomlParser::Result TomlParser::parse_val(cursor str)
         return {val, index};
     }
 
-    val = parse_array(str);
-    if(CPPTOML_NULL != val) {
-        u32 index = create_value(str, val, TomlType::Array);
-        return {val, index};
+    Result result;
+    result = parse_array(str);
+    if(CPPTOML_NULL != result.cursor_) {
+        return result;
     }
 
-    val = parse_inline_table(str);
-    if(CPPTOML_NULL != val) {
-        u32 index = create_value(str, val, TomlType::Table);
-        return {val, index};
+    result = parse_inline_table(str);
+    if(CPPTOML_NULL != result.cursor_) {
+        return result;
     }
 
     val = parse_date_time(str);
@@ -542,16 +642,16 @@ TomlParser::Result TomlParser::parse_val(cursor str)
         return {val, index};
     }
 
-    val = parse_float(str);
-    if(CPPTOML_NULL != val) {
-        u32 index = create_value(str, val, TomlType::Float);
-        return {val, index};
+    ResultFloat fval = parse_float(str);
+    if(CPPTOML_NULL != fval.cursor_) {
+        u32 index = create_float(fval.value_);
+        return {fval.cursor_, index};
     }
 
-    val = parse_integer(str);
-    if(CPPTOML_NULL != val) {
-        u32 index = create_value(str, val, TomlType::Integer);
-        return {val, index};
+    ResultInt ival = parse_integer(str);
+    if(CPPTOML_NULL != ival.cursor_) {
+        u32 index = create_int(ival.value_);
+        return {ival.cursor_, index};
     }
     return {CPPTOML_NULL, 0};
 }
@@ -988,15 +1088,15 @@ TomlParser::cursor TomlParser::parse_boolean(cursor str)
     return CPPTOML_NULL;
 }
 
-TomlParser::cursor TomlParser::parse_array(cursor str)
+TomlParser::Result TomlParser::parse_array(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
     if(0x5BU != str[0]) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
     cursor begin = str;
     ++str;
-    u32 array = create_array(begin, end_);
+    u32 array = create_array();
     cursor val;
     val = parse_array_values(str, array);
     if(CPPTOML_NULL != val) {
@@ -1004,10 +1104,12 @@ TomlParser::cursor TomlParser::parse_array(cursor str)
     }
     str = parse_ws_comment_newline(str);
     if(CPPTOML_NULL == str || end_ <= str || 0x5DU != str[0]) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
-    get(array).length_ = static_cast<u32>(std::distance(begin, str));
-    return str + 1;
+    if(!check_array_mixed_types(array)){
+        return {CPPTOML_NULL, 0};
+    }
+    return {str + 1, array};
 }
 
 TomlParser::cursor TomlParser::parse_array_values(cursor str, u32 array)
@@ -1060,25 +1162,31 @@ TomlParser::cursor TomlParser::parse_ws_comment_newline(cursor str)
     return str;
 }
 
-TomlParser::cursor TomlParser::parse_inline_table(cursor str)
+TomlParser::Result TomlParser::parse_inline_table(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
     if(0x7BU != str[0]) {
-        return CPPTOML_NULL;
+        return {nullptr, 0};
     }
+    cursor begin = str;
     ++str;
     str = skip_spaces(str);
+
+    u32 prev_table = table_;
+    u32 table = create_table();
+    table_ = table;
 
     cursor val;
     val = parse_inline_table_keyvals(str);
     if(CPPTOML_NULL != val) {
         str = val;
     }
+    table_ = prev_table;
     str = skip_spaces(str);
     if(end_ <= str || 0x7DU != str[0]) {
-        return CPPTOML_NULL;
+        return {nullptr, 0};
     }
-    return str + 1;
+    return {str + 1, table};
 }
 
 TomlParser::cursor TomlParser::parse_inline_table_keyvals(cursor str)
@@ -1366,101 +1474,139 @@ TomlParser::cursor TomlParser::parse_time_secfrac(cursor str)
     return str;
 }
 
-TomlParser::cursor TomlParser::parse_float(cursor str)
+TomlParser::ResultFloat TomlParser::parse_float(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
-    cursor val;
+    ResultFloat val;
     val = parse_special_float(str);
-    if(CPPTOML_NULL != val) {
+    if(CPPTOML_NULL != val.cursor_) {
         return val;
     }
 
-    str = parse_float_int_part(str);
-    if(CPPTOML_NULL == str || end_ <= str) {
-        return CPPTOML_NULL;
+    val = parse_float_int_part(str);
+    if(CPPTOML_NULL == val.cursor_ || end_ <= val.cursor_) {
+        return {CPPTOML_NULL, 0.0};
     }
+    str = val.cursor_;
+    f64 value = val.value_;
     switch(str[0]) {
     case 'e':
-    case 'E':
-        str = parse_exp(str);
-        return str;
-    case 0x2EU:
-        str = parse_frac(str);
-        if(CPPTOML_NULL == str) {
-            return CPPTOML_NULL;
+    case 'E':{
+        ResultInt exp = parse_exp(str);
+        if(CPPTOML_NULL == exp.cursor_) {
+            return {CPPTOML_NULL, 0.0};
         }
+        value *= ::pow(10.0, exp.value_);
+        return {exp.cursor_, value};
+    }
+    case 0x2EU:{
+        val = parse_frac(str);
+        if(CPPTOML_NULL == val.cursor_) {
+            return {CPPTOML_NULL, 0.0};
+        }
+        if(is_minus(value)) {
+            value -= val.value_;
+        } else {
+            value += val.value_;
+        }
+        str = val.cursor_;
         if(str < end_) {
             switch(str[0]) {
             case 'e':
-            case 'E':
-                str = parse_exp(str);
+            case 'E':{
+                ResultInt exp = parse_exp(str);
+                if(CPPTOML_NULL == exp.cursor_){
+                    return {CPPTOML_NULL, 0.0};
+                }
+                str = exp.cursor_;
+                value *= ::pow(10.0, exp.value_);
                 break;
+            }
             };
         }
-        return str;
+        return {str, value};
     }
-    return CPPTOML_NULL;
+    }
+    return {CPPTOML_NULL, 0.0};
 }
 
-TomlParser::cursor TomlParser::parse_special_float(cursor str)
+TomlParser::ResultFloat TomlParser::parse_special_float(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
+    bool minus = false;
     switch(str[0]) {
+            case 0x2BU:
+        ++str;
+        break;
     case 0x2DU:
-    case 0x2BU:
+        minus = true;
+        ++str;
         break;
     default:
-        return CPPTOML_NULL;
+        break;
     }
-    if(end_ <= (str + 3)) {
-        return CPPTOML_NULL;
+    if(end_ <= (str + 2)) {
+        return {CPPTOML_NULL, 0.0};
     }
     if(0x69U == str[0] || 0x6EU == str[1] || 0x66U == str[2]) {
-        return str + 3;
+        return {str + 3, minus? -std::numeric_limits<f64>::infinity() : std::numeric_limits<f64>::infinity()};
     }
     if(0x6EU == str[0] || 0x61U == str[1] || 0x6EU == str[2]) {
-        return str + 3;
+        return {str + 3, std::numeric_limits<f64>::quiet_NaN()};
     }
-    return CPPTOML_NULL;
+    return {CPPTOML_NULL, 0.0};
 }
 
-TomlParser::cursor TomlParser::parse_float_int_part(cursor str)
+TomlParser::ResultFloat TomlParser::parse_float_int_part(cursor str)
 {
-    return parse_dec_int(str);
+    ResultInt ivalue = parse_dec_int(str);
+    if(CPPTOML_NULL == ivalue.cursor_){
+        return {CPPTOML_NULL, 0.0};
+    }
+    return {ivalue.cursor_, static_cast<f64>(ivalue.value_)};
 }
 
-TomlParser::cursor TomlParser::parse_dec_int(cursor str)
+TomlParser::ResultInt TomlParser::parse_dec_int(cursor str)
 {
     if(end_ <= str) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
+    bool minus = false;
     switch(str[0]) {
     case 0x2BU:
+        ++str;
+        break;
     case 0x2DU:
+        minus = true;
         ++str;
         break;
     }
-    return parse_unsigned_dec_int(str);
+    return parse_unsigned_dec_int(str, minus);
 }
 
-TomlParser::cursor TomlParser::parse_unsigned_dec_int(cursor str)
+TomlParser::ResultInt TomlParser::parse_unsigned_dec_int(cursor str, bool minus)
 {
     if(end_ <= str) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
+    s64 value = 0;
     switch(str[0]) {
     case 0x30U:
         ++str;
         if(end_ <= str) {
-            return str;
+            return {CPPTOML_NULL, 0};
         }
         if(is_digit(str[0]) || 0x5FU == str[0]) {
-            return CPPTOML_NULL;
+            return {CPPTOML_NULL, 0};
         }
-        return str;
+        return {str, value};
     default:
         if(!is_digit19(str[0])) {
-            return CPPTOML_NULL;
+            return {CPPTOML_NULL, 0};
+        }
+        value = from_digit(str[0]);
+        if(minus){
+            value = -value;
         }
         ++str;
         break;
@@ -1469,187 +1615,243 @@ TomlParser::cursor TomlParser::parse_unsigned_dec_int(cursor str)
         if(0x5FU == str[0]) {
             ++str;
             if(end_ <= str) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
             if(!is_digit(str[0])) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
         } else if(!is_digit(str[0])) {
             break;
         }
+        s64 x = from_digit(str[0]);
+        if(!mul(value, 10) || !add(value, value, x)){
+            return {CPPTOML_NULL, 0};
+        }
         ++str;
     }
-    return str;
+    return {str, value};
 }
 
-TomlParser::cursor TomlParser::parse_exp(cursor str)
+TomlParser::ResultInt TomlParser::parse_exp(cursor str)
 {
     CPPTOML_ASSERT('e' == str[0] || 'E' == str[0]);
     ++str;
     return parse_float_exp_part(str);
 }
 
-TomlParser::cursor TomlParser::parse_float_exp_part(cursor str)
+TomlParser::ResultInt TomlParser::parse_float_exp_part(cursor str)
 {
     if(end_ <= str) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
+    bool minus = false;
     switch(str[0]) {
     case 0x2BU:
+        ++str;
+        break;
     case 0x2DU:
+        minus = true;
         ++str;
         break;
     }
-    return parse_zero_prefixable_int(str);
+    ResultInt value = parse_zero_prefixable_int(str);
+    if(CPPTOML_NULL != value.cursor_ && minus){
+        value.value_ = -value.value_;
+    }
+    return value;
 }
 
-TomlParser::cursor TomlParser::parse_zero_prefixable_int(cursor str)
+TomlParser::ResultInt TomlParser::parse_zero_prefixable_int(cursor str)
 {
     if(end_ <= str || !is_digit(str[0])) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
+    s64 value = from_digit(str[0]);
     ++str;
-
     while(str < end_) {
         if(0x5FU == str[0]) {
             ++str;
             if(end_ <= str) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
             if(!is_digit(str[0])) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
         } else if(!is_digit(str[0])) {
             break;
         }
+        s64 x = from_digit(str[0]);
+        if(!add(value, value, x)){
+            return {CPPTOML_NULL, 0};
+        }
         ++str;
     }
-    return str;
+    if(-1022<=value && value<=1023){
+        return {str, value};
+    }
+    return {CPPTOML_NULL, 0};
 }
 
-TomlParser::cursor TomlParser::parse_frac(cursor str)
+TomlParser::ResultFloat TomlParser::parse_frac(cursor str)
 {
     CPPTOML_ASSERT(0x2EU == str[0]);
     ++str;
-    return parse_zero_prefixable_int(str);
+    if(end_ <= str) {
+        return {CPPTOML_NULL, 0};
+    }
+    f64 frac = 1.0;
+    f64 value = 0.0;
+    u32 count = 0;
+    while(str < end_) {
+        if(0x5FU == str[0]) {
+            if(count<=0){ //invalid underscore after point
+                return {CPPTOML_NULL, 0};
+            }
+            ++str;
+            if(end_ <= str) {
+                return {CPPTOML_NULL, 0};
+            }
+            if(!is_digit(str[0])) {
+                return {CPPTOML_NULL, 0};
+            }
+        } else if(!is_digit(str[0])) {
+            if(count<=0){
+                return {CPPTOML_NULL, 0};
+            }
+            break;
+        }
+        frac *= 0.1;
+        value += frac*from_digit(str[0]);
+        ++str;
+        ++count;
+    }
+    return {str, value};
 }
 
-TomlParser::cursor TomlParser::parse_integer(cursor str)
+TomlParser::ResultInt TomlParser::parse_integer(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
     switch(str[0]) {
     case 0x30U:
         if((str + 1) < end_) {
+            ResultInt result;
             switch(str[1]) {
             case 0x78U:
-                str = parse_hex_prefix(str);
-                if(CPPTOML_NULL == str) {
-                    return CPPTOML_NULL;
-                }
+                result = parse_hex_prefix(str);
                 break;
             case 0x6FU:
-                str = parse_oct_prefix(str);
-                if(CPPTOML_NULL == str) {
-                    return CPPTOML_NULL;
-                }
+                result = parse_oct_prefix(str);
                 break;
             case 0x62U:
-                str = parse_bin_prefix(str);
-                if(CPPTOML_NULL == str) {
-                    return CPPTOML_NULL;
-                }
+                result = parse_bin_prefix(str);
                 break;
             default:
-                break;
+                return parse_dec_int(str);
             }
+            return result;
         }
         break;
     }
     return parse_dec_int(str);
 }
 
-TomlParser::cursor TomlParser::parse_hex_prefix(cursor str)
+TomlParser::ResultInt TomlParser::parse_hex_prefix(cursor str)
 {
     CPPTOML_ASSERT(str < end_ && 0x78U != str[0]);
     ++str;
     if(end_ <= str) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
     if(!is_hexdigit(str[0])) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
 
+    s64 value = 0;
     while(str < end_) {
         if(0x5FU == str[0]) {
             ++str;
             if(end_ <= str) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
             if(!is_hexdigit(str[0])) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
         } else if(!is_hexdigit(str[0])) {
             break;
         }
+        s64 x = from_hex(str[0]);
+        if(!mul(value, 16) || !add(value, value, x)){
+            return {CPPTOML_NULL, 0};
+        }
         ++str;
     }
-    return str;
+    return {str, value};
 }
 
-TomlParser::cursor TomlParser::parse_oct_prefix(cursor str)
+TomlParser::ResultInt TomlParser::parse_oct_prefix(cursor str)
 {
     CPPTOML_ASSERT(str < end_ && 0x6FU != str[0]);
     ++str;
     if(end_ <= str) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
     if(!is_digit07(str[0])) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
 
+    s64 value = 0;
     while(str < end_) {
         if(0x5FU == str[0]) {
             ++str;
             if(end_ <= str) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
             if(!is_digit07(str[0])) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
         } else if(!is_digit07(str[0])) {
             break;
         }
+        s64 x = from_digit(str[0]);
+        if(!mul(value, 8) || !add(value, value, x)){
+            return {CPPTOML_NULL, 0};
+        }
         ++str;
     }
-    return str;
+    return {str, value};
 }
 
-TomlParser::cursor TomlParser::parse_bin_prefix(cursor str)
+TomlParser::ResultInt TomlParser::parse_bin_prefix(cursor str)
 {
     CPPTOML_ASSERT(str < end_ && 0x62U != str[0]);
     ++str;
     if(end_ <= str) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
     if(!is_digit01(str[0])) {
-        return CPPTOML_NULL;
+        return {CPPTOML_NULL, 0};
     }
 
+    s64 value = 0;
     while(str < end_) {
         if(0x5FU == str[0]) {
             ++str;
             if(end_ <= str) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
             if(!is_digit01(str[0])) {
-                return CPPTOML_NULL;
+                return {CPPTOML_NULL, 0};
             }
         } else if(!is_digit01(str[0])) {
             break;
         }
+        s64 x = from_digit(str[0]);
+        if(!mul(value, 2) || !add(value, value, x)){
+            return {CPPTOML_NULL, 0};
+        }
         ++str;
     }
-    return str;
+    return {str, value};
 }
 
 TomlParser::cursor TomlParser::parse_std_table(cursor str)
@@ -1666,25 +1868,31 @@ TomlParser::cursor TomlParser::parse_std_table(cursor str)
     if(CPPTOML_NULL == next.cursor_) {
         return CPPTOML_NULL;
     }
+    if(!validate_table_key_chain(next.index_)) {
+        return CPPTOML_NULL;
+    }
+
     str = skip_spaces(next.cursor_);
     if(end_ <= str || 0x5DU != str[0]) {
         return CPPTOML_NULL;
     }
-    u32 table = create_table(begin, str, false);
-    add_table_value(table_, table);
-    push_table(table);
-    return str+1;
+    if(Invalid == traverse_tables(next.index_, TomlType::Table)){
+        return CPPTOML_NULL;
+    }
+    return str + 1;
 }
 
 TomlParser::cursor TomlParser::parse_array_table(cursor str)
 {
     CPPTOML_ASSERT((str + 1) < end_);
     CPPTOML_ASSERT(is_table(str[0]) && is_table(str[1]));
-    cursor begin = str;
     str += 2;
     str = skip_spaces(str);
     Result next = parse_key(str);
     if(CPPTOML_NULL == next.cursor_) {
+        return CPPTOML_NULL;
+    }
+    if(!validate_array_key_chain(next.index_)){
         return CPPTOML_NULL;
     }
 
@@ -1696,9 +1904,9 @@ TomlParser::cursor TomlParser::parse_array_table(cursor str)
     if(end_ <= str || 0x5DU != str[0]) {
         return CPPTOML_NULL;
     }
-    u32 table = create_table(begin, str, true);
-    add_table_value(table, table);
-    push_table(table);
+    if(Invalid == traverse_tables(next.index_, TomlType::ArrayTable)){
+        return CPPTOML_NULL;
+    }
     return str + 1;
 }
 
@@ -1710,11 +1918,11 @@ u32 TomlParser::length(cursor begin, cursor end) const
 u32 TomlParser::create_value(cursor begin, cursor end, TomlType type)
 {
     u32 index = allocate();
-    TomlValue& value = get(index);
-    value.position_ = length(begin_, begin);
-    value.length_ = length(begin, end);
+    TomlValue& value = get_value(index);
     value.next_ = Invalid;
     value.type_ = type;
+    value.positionLength_.position_ = length(begin_, begin);
+    value.positionLength_.length_ = length(begin, end);
     return index;
 }
 
@@ -1726,20 +1934,18 @@ u32 TomlParser::create_key(cursor begin, cursor end)
         --end;
     }
     u32 index = allocate();
-    TomlValue& value = get(index);
-    value.position_ = static_cast<u32>(std::distance(begin_, begin));
-    value.length_ = static_cast<u32>(std::distance(begin, end));
+    TomlValue& value = get_value(index);
     value.next_ = Invalid;
     value.type_ = TomlType::Key;
+    value.positionLength_.position_ = length(begin_, begin);
+    value.positionLength_.length_ = length(begin, end);
     return index;
 }
 
 u32 TomlParser::create_keyvalue(u32 key, u32 value)
 {
     u32 index = allocate();
-    TomlValue& x = get(index);
-    x.position_ = 0;
-    x.length_ = 0;
+    TomlValue& x = get_value(index);
     x.next_ = Invalid;
     x.type_ = TomlType::KeyValue;
     x.keyvalue_.key_ = static_cast<u16>(key);
@@ -1747,25 +1953,10 @@ u32 TomlParser::create_keyvalue(u32 key, u32 value)
     return index;
 }
 
-u32 TomlParser::create_table(cursor begin, cursor end, bool array_table)
+u32 TomlParser::create_table()
 {
     u32 index = allocate();
-    TomlValue& value = get(index);
-    value.position_ = static_cast<u32>(std::distance(begin_, begin));
-    value.length_ = static_cast<u32>(std::distance(begin, end));
-    value.next_ = Invalid;
-    value.type_ = array_table ? TomlType::ArrayTable : TomlType::Table;
-    value.table_.size_ = 0;
-    value.table_.head_ = Invalid;
-    return index;
-}
-
-u32 TomlParser::create_array(cursor begin, cursor end)
-{
-    u32 index = allocate();
-    TomlValue& value = get(index);
-    value.position_ = static_cast<u32>(std::distance(begin_, begin));
-    value.length_ = static_cast<u32>(std::distance(begin, end));
+    TomlValue& value = get_value(index);
     value.next_ = Invalid;
     value.type_ = TomlType::Table;
     value.table_.size_ = 0;
@@ -1773,28 +1964,70 @@ u32 TomlParser::create_array(cursor begin, cursor end)
     return index;
 }
 
+u32 TomlParser::create_array_table()
+{
+    u32 index = allocate();
+    TomlValue& value = get_value(index);
+    value.next_ = Invalid;
+    value.type_ = TomlType::ArrayTable;
+    value.arrayTable_.size_ = 0;
+    value.arrayTable_.head_ = Invalid;
+    return index;
+}
+
+u32 TomlParser::create_array()
+{
+    u32 index = allocate();
+    TomlValue& value = get_value(index);
+    value.next_ = Invalid;
+    value.type_ = TomlType::Array;
+    value.array_.size_ = 0;
+    value.array_.head_ = Invalid;
+    return index;
+}
+
 u32 TomlParser::create_string(cursor begin, cursor end)
 {
-    while(begin<end && (0x22U == begin[0] || 0x27U == begin[0])){
+    while(begin < end && (0x22U == begin[0] || 0x27U == begin[0])) {
         ++begin;
         --end;
     }
     u32 index = allocate();
-    TomlValue& value = get(index);
-    value.position_ = static_cast<u32>(std::distance(begin_, begin));
-    value.length_ = static_cast<u32>(std::distance(begin, end));
+    TomlValue& value = get_value(index);
     value.next_ = Invalid;
     value.type_ = TomlType::String;
+    value.positionLength_.position_ = length(begin_, begin);
+    value.positionLength_.length_ = length(begin, end);
     return index;
 }
 
-const TomlValue& TomlParser::get(u32 index) const
+    u32 TomlParser::create_float(f64 x)
+{
+        u32 index = allocate();
+    TomlValue& value = get_value(index);
+    value.next_ = Invalid;
+    value.type_ = TomlType::Float;
+    value.float_ = x;
+    return index;
+}
+
+    u32 TomlParser::create_int(s64 x)
+{
+        u32 index = allocate();
+    TomlValue& value = get_value(index);
+    value.next_ = Invalid;
+    value.type_ = TomlType::Integer;
+    value.int_ = x;
+    return index;
+}
+
+const TomlValue& TomlParser::get_value(u32 index) const
 {
     CPPTOML_ASSERT(index < size_);
     return buffer_[index];
 }
 
-TomlValue& TomlParser::get(u32 index)
+TomlValue& TomlParser::get_value(u32 index)
 {
     CPPTOML_ASSERT(index < size_);
     return buffer_[index];
@@ -1822,29 +2055,19 @@ u32 TomlParser::allocate()
     return result;
 }
 
-void TomlParser::push_table(u32 table)
-{
-    table_ = table;
-}
-
 void TomlParser::reset_table()
 {
     table_ = 0;
-}
-
-bool TomlParser::is_in_array_table() const
-{
-    const TomlValue& table = get(table_);
-    return TomlType::ArrayTable == table.type_;
+    array_table_ = Invalid;
 }
 
 void TomlParser::add_table_value(u32 table, u32 value)
 {
-    TomlValue& target = get(table);
+    TomlValue& target = get_value(table);
     ++target.table_.size_;
     u32 current = target.table_.head_;
     while(current != Invalid) {
-        TomlValue& x = get(current);
+        TomlValue& x = get_value(current);
         if(Invalid == x.next_) {
             x.next_ = static_cast<u16>(value);
             return;
@@ -1856,11 +2079,11 @@ void TomlParser::add_table_value(u32 table, u32 value)
 
 void TomlParser::add_array_value(u32 array, u32 value)
 {
-    TomlValue& target = get(array);
+    TomlValue& target = get_value(array);
     ++target.array_.size_;
     u32 current = target.array_.head_;
     while(current != Invalid) {
-        TomlValue& x = get(current);
+        TomlValue& x = get_value(current);
         if(Invalid == x.next_) {
             x.next_ = static_cast<u16>(value);
             return;
@@ -1872,9 +2095,9 @@ void TomlParser::add_array_value(u32 array, u32 value)
 
 TomlStringProxy TomlParser::get_string(u32 index) const
 {
-    const TomlValue& value = get(index);
+    const TomlValue& value = get_value(index);
     if(TomlType::String == value.type_) {
-        return {true, value.length_, str(value.position_)};
+        return {true, value.positionLength_.length_, str(value.positionLength_.position_)};
     }
     return {false, 0, CPPTOML_NULL};
 }
@@ -2179,12 +2402,12 @@ namespace
 
 TomlDateTimeProxy TomlParser::get_datetime(u32 index) const
 {
-    const TomlValue& value = get(index);
+    const TomlValue& value = get_value(index);
     if(TomlType::DateTime != value.type_) {
         return {false};
     }
-    const char* begin = str(value.position_);
-    const char* end = begin + value.length_;
+    const char* begin = str(value.positionLength_.position_);
+    const char* end = begin + value.positionLength_.length_;
     TomlDateTimeProxy datetime = {};
     datetime.valid_ = parse_date_time_internal(datetime, begin, end);
     return datetime;
@@ -2192,68 +2415,29 @@ TomlDateTimeProxy TomlParser::get_datetime(u32 index) const
 
 TomlFloatProxy TomlParser::get_float(u32 index) const
 {
-    const TomlValue& value = get(index);
+    const TomlValue& value = get_value(index);
     if(TomlType::Float != value.type_) {
         return {false, 0.0};
     }
-    const char* begin = str(value.position_);
-    f64 x;
-    std::from_chars_result result = std::from_chars(begin, begin + value.length_, x);
-    if(result.ec == std::errc{}) {
-        return {true, x};
-    } else {
-        return {false, 0.0};
-    }
+    return {true, value.float_};
 }
 
 TomlIntProxy TomlParser::get_int(u32 index) const
 {
-    const TomlValue& value = get(index);
+    const TomlValue& value = get_value(index);
     if(TomlType::Integer != value.type_) {
         return {false, 0};
     }
-    const char* begin = str(value.position_);
-    const char* end = begin + value.length_;
-    s64 x;
-    std::from_chars_result result;
-    switch(begin[0]) {
-    case 0x30U:
-        if((begin + 1) < end) {
-            switch(begin[1]) {
-            case 0x78U:
-                result = std::from_chars(begin, end, x, 16);
-                break;
-            case 0x6FU:
-                result = std::from_chars(begin, end, x, 8);
-                break;
-            case 0x62U:
-                result = std::from_chars(begin, end, x, 2);
-                break;
-            default:
-                return {false, 0};
-            }
-        } else {
-            return {false, 0};
-        }
-        break;
-    default:
-        result = std::from_chars(begin, end, x, 10);
-        break;
-    }
-    if(result.ec == std::errc{}) {
-        return {true, x};
-    } else {
-        return {false, 0};
-    }
+    return {true, value.int_};
 }
 
 TomlBoolProxy TomlParser::get_bool(u32 index) const
 {
-    const TomlValue& value = get(index);
-    if(TomlType::Boolean != value.type_ || value.length_ < 4) {
+    const TomlValue& value = get_value(index);
+    if(TomlType::Boolean != value.type_ || value.positionLength_.length_ < 4) {
         return {false, false};
     }
-    const char* begin = str(value.position_);
+    const char* begin = str(value.positionLength_.position_);
     switch(begin[0]) {
     case 0x74U:
         if(0x72U == begin[1] && 0x75U == begin[2] && 0x65U == begin[3]) {
@@ -2261,7 +2445,7 @@ TomlBoolProxy TomlParser::get_bool(u32 index) const
         }
         break;
     case 0x66U:
-        if(5 <= value.length_ && 0x61U == begin[1] && 0x6CU == begin[2] && 0x73U == begin[3] && 0x65U == begin[4]) {
+        if(5 <= value.positionLength_.length_ && 0x61U == begin[1] && 0x6CU == begin[2] && 0x73U == begin[3] && 0x65U == begin[4]) {
             return {true, false};
         }
         break;
@@ -2271,6 +2455,180 @@ TomlBoolProxy TomlParser::get_bool(u32 index) const
     return {false, false};
 }
 
+bool TomlParser::equal(const TomlPositionLength& x0, const TomlPositionLength& x1) const
+{
+    if(x0.length_ != x1.length_){
+        return false;
+    }
+    const char* s0 = str(x0.position_);
+    const char* s1 = str(x1.position_);
+    return 0 == ::strncmp(s0, s1, x0.length_);
+}
+
+bool TomlParser::compare_key_chain(u32 key0, u32 key1) const
+{
+    CPPTOML_ASSERT(Invalid != key0);
+    CPPTOML_ASSERT(Invalid != key1);
+    for(;;) {
+        const TomlValue& x0 = get_value(key0);
+        const TomlValue& x1 = get_value(key1);
+        if(!equal(x0.positionLength_, x1.positionLength_)) {
+            return false;
+        }
+        key0 = x0.next_;
+        key1 = x1.next_;
+        if(Invalid != key0 || Invalid != key1){
+            break;
+        }
+        if(Invalid == key0 && Invalid == key1){
+            return true;
+        }
+    }
+    return false;
+}
+
+u32 TomlParser::traverse_tables(u32 key_chain, TomlType type)
+{
+    const TomlValue& key = get_value(key_chain);
+    TomlTableProxy table = top();
+    for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
+        CPPTOML_ASSERT(TomlType::KeyValue == get_value(itr).type_);
+        TomlKeyValueProxy keyvalue = table[itr];
+        switch(keyvalue.value().type()){
+        case TomlType::Table:{
+            const TomlValue& k = get_value(keyvalue.getKeyIndex());
+            if(equal(k.positionLength_, key.positionLength_)) {
+                if(type != TomlType::Table){
+                    return Invalid;
+                } else if(Invalid == key.next_){
+                    return key_chain;
+                }else{
+                    table_ = keyvalue.getValueIndex();
+                    return traverse_tables(key.next_, type);
+                }
+            }
+        }
+            break;
+        case TomlType::ArrayTable:{
+            const TomlValue& k = get_value(keyvalue.getKeyIndex());
+            if(equal(k.positionLength_, key.positionLength_)) {
+                if(Invalid == key.next_){
+                    array_table_ = keyvalue.getValueIndex();
+                    table_ = create_table();
+                    add_array_value(array_table_, table_);
+                    return key_chain;
+                }else{
+                    array_table_ = keyvalue.getValueIndex();
+                    table_ = get_last_table(array_table_);
+                    return traverse_tables(key.next_, type);
+                }
+            }
+        }
+            break;
+        default:{
+            const TomlValue& x0 = get_value(keyvalue.getKeyIndex());
+            if(equal(x0.positionLength_, key.positionLength_)) {
+                return Invalid;
+            }
+        }
+            break;
+        }
+    } //for(u32 itr
+    switch(type){
+    case TomlType::Table:{
+        u32 new_table = create_table();
+        add_table_value(table_, create_keyvalue(key_chain, new_table));
+        table_ = new_table;
+    }
+        break;
+    case TomlType::ArrayTable:
+        if(Invalid == key.next_) {
+            array_table_ = create_array_table();
+            add_table_value(table_, create_keyvalue(key_chain, array_table_));
+            table_ = create_table();
+            add_array_value(array_table_, table_);
+        } else {
+            u32 new_table = create_table();
+            add_table_value(table_, create_keyvalue(key_chain, new_table));
+            table_ = new_table;
+        }
+        break;
+    default:
+        break;
+    }
+    return Invalid != key.next_? traverse_tables(key.next_, type) : key_chain;
+}
+
+u32 TomlParser::get_last_table(u32 index)
+{
+    TomlArrayTableProxy array_table = {this, index};
+    u32 result = index;
+    for(u32 itr = array_table.begin(); itr != array_table.end(); itr = array_table.next(itr)){
+        result = itr;
+    }
+    return result;
+}
+
+u32 TomlParser::find_array_table(u32 key_chain) const
+{
+    CPPTOML_ASSERT(Invalid != key_chain);
+    TomlTableProxy table = top();
+    for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
+        TomlKeyValueProxy value = table[itr];
+        if(TomlType::ArrayTable != value.value().type()){
+            continue;
+        }
+        if(compare_key_chain(value.getKeyIndex(), key_chain)) {
+            return itr;
+        }
+    }
+    return Invalid;
+}
+
+bool TomlParser::validate_table_key_chain(u32 key_chain) const
+{
+    TomlTableProxy table = top();
+    for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
+        TomlKeyValueProxy value = table[itr];
+        if(compare_key_chain(value.getKeyIndex(), key_chain)){
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TomlParser::validate_array_key_chain(u32 key_chain) const
+{
+    TomlTableProxy table = top();
+    for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
+        TomlKeyValueProxy value = table[itr];
+        if(value.value().type() == TomlType::ArrayTable){
+            continue;
+        }
+        if(compare_key_chain(value.getKeyIndex(), key_chain)){
+            return false;
+        }
+    }
+    return true;
+}
+
+bool TomlParser::check_array_mixed_types(u32 index) const
+{
+    TomlArrayProxy array = {this, index};
+    TomlType type = TomlType::None;
+    for(u32 itr = array.begin(); itr != array.end(); itr = array.next(itr)) {
+        TomlValueProxy value = array[itr];
+        if(type == TomlType::None) {
+            type = value.type();
+        } else if(type != value.type()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+//--- TomlValueProxy
+//---------------------------------------
 template<>
 TomlStringProxy TomlValueProxy::value<TomlStringProxy>() const
 {
@@ -2309,6 +2667,12 @@ TomlArrayProxy TomlValueProxy::value<TomlArrayProxy>() const
 
 template<>
 TomlTableProxy TomlValueProxy::value<TomlTableProxy>() const
+{
+    return {parser_, value_};
+}
+
+template<>
+TomlArrayTableProxy TomlValueProxy::value<TomlArrayTableProxy>() const
 {
     return {parser_, value_};
 }

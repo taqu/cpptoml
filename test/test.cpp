@@ -227,7 +227,7 @@ void print(const cpptoml::TomlTableProxy& table, cpptoml::u32 indent)
     ::printf("}\n");
 }
 
-bool test_toml(const char* filepath, bool print_result)
+bool test_valid(const char* filepath, bool print_result)
 {
     printf("%s\n", filepath);
 #ifdef _WIN32
@@ -284,8 +284,63 @@ bool test_toml(const char* filepath, bool print_result)
     ::free(buffer);
     return result;
 }
+
+bool test_invalid(const char* filepath)
+{
+    printf("%s\n", filepath);
+#ifdef _WIN32
+    HANDLE file = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if(nullptr == file) {
+        return false;
+    }
+    DWORD size = 0;
+    size = GetFileSize(file, NULL);
+#else
+    FILE* file = fopen(filepath, "rb");
+    if(nullptr == file) {
+        return false;
+    }
+    std::size_t size;
+    {
+        int fd = fileno(file);
+        if(fd<0) {
+            fclose(file);
+            return false;
+        }
+        struct stat s;
+        if(0 != fstat(fd, &s)) {
+            fclose(file);
+            return false;
+        }
+        size = s.st_size;
+    }
+#endif
+    cpptoml::u8* buffer = reinterpret_cast<cpptoml::u8*>(::malloc(sizeof(cpptoml::u8) * size));
+
+#ifdef _WIN32
+    if(!ReadFile(file, buffer, size, &size, NULL)) {
+        CloseHandle(file);
+        return false;
+    }
+    CloseHandle(file);
+#else
+
+    if(fread(buffer, size, 1, file) < 1) {
+        fclose(file);
+        return false;
+    }
+    fclose(file);
+#endif
+
+    cpptoml::TomlParser parser;
+    bool result = parser.parse(buffer, buffer + size);
+    ::free(buffer);
+    return false == result;
+}
+
 } // namespace
 
+#if 1
 TEST_CASE("TestToml::Valid")
 {
     Directory directory;
@@ -306,12 +361,14 @@ TEST_CASE("TestToml::Valid")
             continue;
         }
         std::string path = directory.path();
-        bool result = test_toml(path.c_str(), false);
+        bool result = test_valid(path.c_str(), false);
         EXPECT_TRUE(result);
     } while(directory.next());
     directory.close();
 }
+#endif
 
+#if 1
 TEST_CASE("TestToml::InValid")
 {
     Directory directory;
@@ -329,26 +386,32 @@ TEST_CASE("TestToml::InValid")
     static const int32_t skip = 0;
     do {
         ++count;
-        if(count <= skip) {
+        if(count < skip) {
             continue;
         }
         std::string path = directory.path();
-        bool result = test_toml(path.c_str(), false);
-        EXPECT_FALSE(result);
+        bool result = test_invalid(path.c_str());
+        EXPECT_TRUE(result);
     } while(directory.next());
     directory.close();
 }
+#endif
 
-#if 0
+#if 1
 TEST_CASE("TestToml::PrintValues")
 {
     std::string path;
     path = "../toml-test/tests/valid/string-simple.toml";
     bool result;
-    result = test_toml(path.c_str(), true);
+    result = test_valid(path.c_str(), true);
     EXPECT_TRUE(result);
+
     path = "../toml-test/tests/valid/string-with-pound.toml";
-    result = test_toml(path.c_str(), true);
+    result = test_valid(path.c_str(), true);
+    EXPECT_TRUE(result);
+
+    path = "../toml-test/tests/valid/table-array-implicit.toml";
+    result = test_valid(path.c_str(), true);
     EXPECT_TRUE(result);
 }
 #endif
