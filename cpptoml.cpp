@@ -58,6 +58,7 @@ For more information, please refer to <http://unlicense.org>
 #include <charconv>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <iterator>
 #include <limits>
 
@@ -377,8 +378,6 @@ s64 TomlParser::from_digit(UChar c)
 
 s64 TomlParser::from_hex(UChar c)
 {
-    return is_digit(c) || (0x41U <= c && c <= 0x46U) || (0x61U <= c && c <= 0x66U);
-
     if(is_digit(c)){
         return c-0x30U;
     }
@@ -1094,7 +1093,6 @@ TomlParser::Result TomlParser::parse_array(cursor str)
     if(0x5BU != str[0]) {
         return {CPPTOML_NULL, 0};
     }
-    cursor begin = str;
     ++str;
     u32 array = create_array();
     cursor val;
@@ -1168,7 +1166,6 @@ TomlParser::Result TomlParser::parse_inline_table(cursor str)
     if(0x7BU != str[0]) {
         return {nullptr, 0};
     }
-    cursor begin = str;
     ++str;
     str = skip_spaces(str);
 
@@ -1858,7 +1855,6 @@ TomlParser::cursor TomlParser::parse_std_table(cursor str)
 {
     CPPTOML_ASSERT(str < end_);
     CPPTOML_ASSERT(is_table(str[0]));
-    cursor begin = str;
     ++str;
     str = skip_spaces(str);
     if(end_ <= str) {

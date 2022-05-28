@@ -266,8 +266,7 @@ bool test_valid(const char* filepath, bool print_result)
     }
     CloseHandle(file);
 #else
-
-    if(fread(buffer, size, 1, file) < 1) {
+    if(0<size && fread(buffer, size, 1, file) < 1) {
         fclose(file);
         return false;
     }
@@ -401,16 +400,8 @@ TEST_CASE("TestToml::InValid")
 TEST_CASE("TestToml::PrintValues")
 {
     std::string path;
-    path = "../toml-test/tests/valid/string-simple.toml";
+    path = "../toml-test/tests/valid/empty.toml";
     bool result;
-    result = test_valid(path.c_str(), true);
-    EXPECT_TRUE(result);
-
-    path = "../toml-test/tests/valid/string-with-pound.toml";
-    result = test_valid(path.c_str(), true);
-    EXPECT_TRUE(result);
-
-    path = "../toml-test/tests/valid/table-array-implicit.toml";
     result = test_valid(path.c_str(), true);
     EXPECT_TRUE(result);
 }

@@ -32,7 +32,7 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_RELEASE "/MD /O2 /GL /GR- /DNDEBUG")
 
 elseif(UNIX)
-    set(DEFAULT_CXX_FLAGS "-Wall -O0 -std=c++17 -std=gnu++17 -march=native")
+    set(DEFAULT_CXX_FLAGS "-Wall -O0 -g -std=c++17 -std=gnu++17 -march=native")
     set(CMAKE_CXX_FLAGS "${DEFAULT_CXX_FLAGS}")
 elseif(APPLE)
 endif()
