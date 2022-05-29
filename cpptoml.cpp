@@ -540,6 +540,7 @@ TomlParser::cursor TomlParser::parse_keyval(cursor str)
     if(CPPTOML_NULL == k.cursor_) {
         return CPPTOML_NULL;
     }
+    u32 table = table_;
     k.index_ = traverse_tables(k.index_, TomlType::None);
     if(Invalid == k.index_) {
         return CPPTOML_NULL;
@@ -552,6 +553,7 @@ TomlParser::cursor TomlParser::parse_keyval(cursor str)
     if(CPPTOML_NULL == v.cursor_) {
         return CPPTOML_NULL;
     }
+    table_ = table;
     add_table_value(table_, create_keyvalue(k.index_, v.index_));
     return v.cursor_;
 }
