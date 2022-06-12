@@ -56,9 +56,9 @@ For more information, please refer to <http://unlicense.org>
 */
 #include "cpptoml.h"
 #include <charconv>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <cmath>
 #include <iterator>
 #include <limits>
 
@@ -330,15 +330,15 @@ bool TomlParser::is_table(UChar c)
 
 bool TomlParser::is_minus(f64 x)
 {
-    return x<0.0;
+    return x < 0.0;
 }
 
 bool TomlParser::check_overflow(s64 x0, s64 x1, s64 x2)
 {
-    if(0<=x1 && x0<x2){
+    if(0 <= x1 && x0 < x2) {
         return false;
     }
-    if(x1<0 && x2<x0){
+    if(x1 < 0 && x2 < x0) {
         return false;
     }
     return true;
@@ -348,24 +348,24 @@ bool TomlParser::mul(s64& x, s64 base)
 {
     s64 t = x;
     x *= base;
-    if(0<=t){
-        return t<=x;
-    }else{
-        return x<=t;
+    if(0 <= t) {
+        return t <= x;
+    } else {
+        return x <= t;
     }
 }
 
 bool TomlParser::add(s64& x, s64 x0, s64 x1)
 {
-    if(0<=x0){
-    x = x0 + x1;
-    }else{
-        x = x0-x1;
+    if(0 <= x0) {
+        x = x0 + x1;
+    } else {
+        x = x0 - x1;
     }
-    if(0<=x0 && x<x1){
+    if(0 <= x0 && x < x1) {
         return false;
     }
-    if(x0<0 && x1<x){
+    if(x0 < 0 && x1 < x) {
         return false;
     }
     return true;
@@ -373,19 +373,19 @@ bool TomlParser::add(s64& x, s64 x0, s64 x1)
 
 s64 TomlParser::from_digit(UChar c)
 {
-    return c-0x30U;
+    return c - 0x30U;
 }
 
 s64 TomlParser::from_hex(UChar c)
 {
-    if(is_digit(c)){
-        return c-0x30U;
+    if(is_digit(c)) {
+        return c - 0x30U;
     }
-    if(0x41U <= c && c <= 0x46U){
-        return c-0x41U;
+    if(0x41U <= c && c <= 0x46U) {
+        return c - 0x41U;
     }
-    if(0x61U <= c && c <= 0x66U){
-        return c-0x61U;
+    if(0x61U <= c && c <= 0x66U) {
+        return c - 0x61U;
     }
     return 0;
 }
@@ -577,7 +577,7 @@ TomlParser::Result TomlParser::parse_key(cursor str)
     cursor dot_sep = parse_dot_sep(str);
     if(CPPTOML_NULL != dot_sep) {
         TomlParser::Result result = parse_key(dot_sep);
-        if(CPPTOML_NULL == result.cursor_){
+        if(CPPTOML_NULL == result.cursor_) {
             return result;
         }
         str = result.cursor_;
@@ -1106,7 +1106,7 @@ TomlParser::Result TomlParser::parse_array(cursor str)
     if(CPPTOML_NULL == str || end_ <= str || 0x5DU != str[0]) {
         return {CPPTOML_NULL, 0};
     }
-    if(!check_array_mixed_types(array)){
+    if(!check_array_mixed_types(array)) {
         return {CPPTOML_NULL, 0};
     }
     return {str + 1, array};
@@ -1490,7 +1490,7 @@ TomlParser::ResultFloat TomlParser::parse_float(cursor str)
     f64 value = val.value_;
     switch(str[0]) {
     case 'e':
-    case 'E':{
+    case 'E': {
         ResultInt exp = parse_exp(str);
         if(CPPTOML_NULL == exp.cursor_) {
             return {CPPTOML_NULL, 0.0};
@@ -1498,7 +1498,7 @@ TomlParser::ResultFloat TomlParser::parse_float(cursor str)
         value *= ::pow(10.0, exp.value_);
         return {exp.cursor_, value};
     }
-    case 0x2EU:{
+    case 0x2EU: {
         val = parse_frac(str);
         if(CPPTOML_NULL == val.cursor_) {
             return {CPPTOML_NULL, 0.0};
@@ -1512,9 +1512,9 @@ TomlParser::ResultFloat TomlParser::parse_float(cursor str)
         if(str < end_) {
             switch(str[0]) {
             case 'e':
-            case 'E':{
+            case 'E': {
                 ResultInt exp = parse_exp(str);
-                if(CPPTOML_NULL == exp.cursor_){
+                if(CPPTOML_NULL == exp.cursor_) {
                     return {CPPTOML_NULL, 0.0};
                 }
                 str = exp.cursor_;
@@ -1534,7 +1534,7 @@ TomlParser::ResultFloat TomlParser::parse_special_float(cursor str)
     CPPTOML_ASSERT(str < end_);
     bool minus = false;
     switch(str[0]) {
-            case 0x2BU:
+    case 0x2BU:
         ++str;
         break;
     case 0x2DU:
@@ -1548,7 +1548,7 @@ TomlParser::ResultFloat TomlParser::parse_special_float(cursor str)
         return {CPPTOML_NULL, 0.0};
     }
     if(0x69U == str[0] || 0x6EU == str[1] || 0x66U == str[2]) {
-        return {str + 3, minus? -std::numeric_limits<f64>::infinity() : std::numeric_limits<f64>::infinity()};
+        return {str + 3, minus ? -std::numeric_limits<f64>::infinity() : std::numeric_limits<f64>::infinity()};
     }
     if(0x6EU == str[0] || 0x61U == str[1] || 0x6EU == str[2]) {
         return {str + 3, std::numeric_limits<f64>::quiet_NaN()};
@@ -1559,7 +1559,7 @@ TomlParser::ResultFloat TomlParser::parse_special_float(cursor str)
 TomlParser::ResultFloat TomlParser::parse_float_int_part(cursor str)
 {
     ResultInt ivalue = parse_dec_int(str);
-    if(CPPTOML_NULL == ivalue.cursor_){
+    if(CPPTOML_NULL == ivalue.cursor_) {
         return {CPPTOML_NULL, 0.0};
     }
     return {ivalue.cursor_, static_cast<f64>(ivalue.value_)};
@@ -1604,7 +1604,7 @@ TomlParser::ResultInt TomlParser::parse_unsigned_dec_int(cursor str, bool minus)
             return {CPPTOML_NULL, 0};
         }
         value = from_digit(str[0]);
-        if(minus){
+        if(minus) {
             value = -value;
         }
         ++str;
@@ -1623,7 +1623,7 @@ TomlParser::ResultInt TomlParser::parse_unsigned_dec_int(cursor str, bool minus)
             break;
         }
         s64 x = from_digit(str[0]);
-        if(!mul(value, 10) || !add(value, value, x)){
+        if(!mul(value, 10) || !add(value, value, x)) {
             return {CPPTOML_NULL, 0};
         }
         ++str;
@@ -1654,7 +1654,7 @@ TomlParser::ResultInt TomlParser::parse_float_exp_part(cursor str)
         break;
     }
     ResultInt value = parse_zero_prefixable_int(str);
-    if(CPPTOML_NULL != value.cursor_ && minus){
+    if(CPPTOML_NULL != value.cursor_ && minus) {
         value.value_ = -value.value_;
     }
     return value;
@@ -1680,12 +1680,12 @@ TomlParser::ResultInt TomlParser::parse_zero_prefixable_int(cursor str)
             break;
         }
         s64 x = from_digit(str[0]);
-        if(!add(value, value, x)){
+        if(!add(value, value, x)) {
             return {CPPTOML_NULL, 0};
         }
         ++str;
     }
-    if(-1022<=value && value<=1023){
+    if(-1022 <= value && value <= 1023) {
         return {str, value};
     }
     return {CPPTOML_NULL, 0};
@@ -1703,7 +1703,7 @@ TomlParser::ResultFloat TomlParser::parse_frac(cursor str)
     u32 count = 0;
     while(str < end_) {
         if(0x5FU == str[0]) {
-            if(count<=0){ //invalid underscore after point
+            if(count <= 0) { // invalid underscore after point
                 return {CPPTOML_NULL, 0};
             }
             ++str;
@@ -1714,13 +1714,13 @@ TomlParser::ResultFloat TomlParser::parse_frac(cursor str)
                 return {CPPTOML_NULL, 0};
             }
         } else if(!is_digit(str[0])) {
-            if(count<=0){
+            if(count <= 0) {
                 return {CPPTOML_NULL, 0};
             }
             break;
         }
         frac *= 0.1;
-        value += frac*from_digit(str[0]);
+        value += frac * from_digit(str[0]);
         ++str;
         ++count;
     }
@@ -1779,7 +1779,7 @@ TomlParser::ResultInt TomlParser::parse_hex_prefix(cursor str)
             break;
         }
         s64 x = from_hex(str[0]);
-        if(!mul(value, 16) || !add(value, value, x)){
+        if(!mul(value, 16) || !add(value, value, x)) {
             return {CPPTOML_NULL, 0};
         }
         ++str;
@@ -1812,7 +1812,7 @@ TomlParser::ResultInt TomlParser::parse_oct_prefix(cursor str)
             break;
         }
         s64 x = from_digit(str[0]);
-        if(!mul(value, 8) || !add(value, value, x)){
+        if(!mul(value, 8) || !add(value, value, x)) {
             return {CPPTOML_NULL, 0};
         }
         ++str;
@@ -1845,7 +1845,7 @@ TomlParser::ResultInt TomlParser::parse_bin_prefix(cursor str)
             break;
         }
         s64 x = from_digit(str[0]);
-        if(!mul(value, 2) || !add(value, value, x)){
+        if(!mul(value, 2) || !add(value, value, x)) {
             return {CPPTOML_NULL, 0};
         }
         ++str;
@@ -1874,7 +1874,7 @@ TomlParser::cursor TomlParser::parse_std_table(cursor str)
     if(end_ <= str || 0x5DU != str[0]) {
         return CPPTOML_NULL;
     }
-    if(Invalid == traverse_tables(next.index_, TomlType::Table)){
+    if(Invalid == traverse_tables(next.index_, TomlType::Table)) {
         return CPPTOML_NULL;
     }
     return str + 1;
@@ -1890,7 +1890,7 @@ TomlParser::cursor TomlParser::parse_array_table(cursor str)
     if(CPPTOML_NULL == next.cursor_) {
         return CPPTOML_NULL;
     }
-    if(!validate_array_key_chain(next.index_)){
+    if(!validate_array_key_chain(next.index_)) {
         return CPPTOML_NULL;
     }
 
@@ -1902,7 +1902,7 @@ TomlParser::cursor TomlParser::parse_array_table(cursor str)
     if(end_ <= str || 0x5DU != str[0]) {
         return CPPTOML_NULL;
     }
-    if(Invalid == traverse_tables(next.index_, TomlType::ArrayTable)){
+    if(Invalid == traverse_tables(next.index_, TomlType::ArrayTable)) {
         return CPPTOML_NULL;
     }
     return str + 1;
@@ -1999,9 +1999,9 @@ u32 TomlParser::create_string(cursor begin, cursor end)
     return index;
 }
 
-    u32 TomlParser::create_float(f64 x)
+u32 TomlParser::create_float(f64 x)
 {
-        u32 index = allocate();
+    u32 index = allocate();
     TomlValue& value = get_value(index);
     value.next_ = Invalid;
     value.type_ = TomlType::Float;
@@ -2009,9 +2009,9 @@ u32 TomlParser::create_string(cursor begin, cursor end)
     return index;
 }
 
-    u32 TomlParser::create_int(s64 x)
+u32 TomlParser::create_int(s64 x)
 {
-        u32 index = allocate();
+    u32 index = allocate();
     TomlValue& value = get_value(index);
     value.next_ = Invalid;
     value.type_ = TomlType::Integer;
@@ -2455,7 +2455,7 @@ TomlBoolProxy TomlParser::get_bool(u32 index) const
 
 bool TomlParser::equal(const TomlPositionLength& x0, const TomlPositionLength& x1) const
 {
-    if(x0.length_ != x1.length_){
+    if(x0.length_ != x1.length_) {
         return false;
     }
     const char* s0 = str(x0.position_);
@@ -2475,10 +2475,10 @@ bool TomlParser::compare_key_chain(u32 key0, u32 key1) const
         }
         key0 = x0.next_;
         key1 = x1.next_;
-        if(Invalid != key0 || Invalid != key1){
+        if(Invalid != key0 || Invalid != key1) {
             break;
         }
-        if(Invalid == key0 && Invalid == key1){
+        if(Invalid == key0 && Invalid == key1) {
             return true;
         }
     }
@@ -2492,53 +2492,49 @@ u32 TomlParser::traverse_tables(u32 key_chain, TomlType type)
     for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
         CPPTOML_ASSERT(TomlType::KeyValue == get_value(itr).type_);
         TomlKeyValueProxy keyvalue = table[itr];
-        switch(keyvalue.value().type()){
-        case TomlType::Table:{
+        switch(keyvalue.value().type()) {
+        case TomlType::Table: {
             const TomlValue& k = get_value(keyvalue.getKeyIndex());
             if(equal(k.positionLength_, key.positionLength_)) {
-                if(type != TomlType::Table){
+                if(type != TomlType::Table) {
                     return Invalid;
-                } else if(Invalid == key.next_){
+                } else if(Invalid == key.next_) {
                     return key_chain;
-                }else{
+                } else {
                     table_ = keyvalue.getValueIndex();
                     return traverse_tables(key.next_, type);
                 }
             }
-        }
-            break;
-        case TomlType::ArrayTable:{
+        } break;
+        case TomlType::ArrayTable: {
             const TomlValue& k = get_value(keyvalue.getKeyIndex());
             if(equal(k.positionLength_, key.positionLength_)) {
-                if(Invalid == key.next_){
+                if(Invalid == key.next_) {
                     array_table_ = keyvalue.getValueIndex();
                     table_ = create_table();
                     add_array_value(array_table_, table_);
                     return key_chain;
-                }else{
+                } else {
                     array_table_ = keyvalue.getValueIndex();
                     table_ = get_last_table(array_table_);
                     return traverse_tables(key.next_, type);
                 }
             }
-        }
-            break;
-        default:{
+        } break;
+        default: {
             const TomlValue& x0 = get_value(keyvalue.getKeyIndex());
             if(equal(x0.positionLength_, key.positionLength_)) {
                 return Invalid;
             }
+        } break;
         }
-            break;
-        }
-    } //for(u32 itr
-    switch(type){
-    case TomlType::Table:{
+    } // for(u32 itr
+    switch(type) {
+    case TomlType::Table: {
         u32 new_table = create_table();
         add_table_value(table_, create_keyvalue(key_chain, new_table));
         table_ = new_table;
-    }
-        break;
+    } break;
     case TomlType::ArrayTable:
         if(Invalid == key.next_) {
             array_table_ = create_array_table();
@@ -2554,14 +2550,14 @@ u32 TomlParser::traverse_tables(u32 key_chain, TomlType type)
     default:
         break;
     }
-    return Invalid != key.next_? traverse_tables(key.next_, type) : key_chain;
+    return Invalid != key.next_ ? traverse_tables(key.next_, type) : key_chain;
 }
 
 u32 TomlParser::get_last_table(u32 index)
 {
     TomlArrayTableProxy array_table = {this, index};
     u32 result = index;
-    for(u32 itr = array_table.begin(); itr != array_table.end(); itr = array_table.next(itr)){
+    for(u32 itr = array_table.begin(); itr != array_table.end(); itr = array_table.next(itr)) {
         result = itr;
     }
     return result;
@@ -2573,7 +2569,7 @@ u32 TomlParser::find_array_table(u32 key_chain) const
     TomlTableProxy table = top();
     for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
         TomlKeyValueProxy value = table[itr];
-        if(TomlType::ArrayTable != value.value().type()){
+        if(TomlType::ArrayTable != value.value().type()) {
             continue;
         }
         if(compare_key_chain(value.getKeyIndex(), key_chain)) {
@@ -2588,7 +2584,7 @@ bool TomlParser::validate_table_key_chain(u32 key_chain) const
     TomlTableProxy table = top();
     for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
         TomlKeyValueProxy value = table[itr];
-        if(compare_key_chain(value.getKeyIndex(), key_chain)){
+        if(compare_key_chain(value.getKeyIndex(), key_chain)) {
             return false;
         }
     }
@@ -2600,10 +2596,10 @@ bool TomlParser::validate_array_key_chain(u32 key_chain) const
     TomlTableProxy table = top();
     for(u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
         TomlKeyValueProxy value = table[itr];
-        if(value.value().type() == TomlType::ArrayTable){
+        if(value.value().type() == TomlType::ArrayTable) {
             continue;
         }
-        if(compare_key_chain(value.getKeyIndex(), key_chain)){
+        if(compare_key_chain(value.getKeyIndex(), key_chain)) {
             return false;
         }
     }
@@ -2675,4 +2671,200 @@ TomlArrayTableProxy TomlValueProxy::value<TomlArrayTableProxy>() const
     return {parser_, value_};
 }
 
+//--- TomlProxy
+//---------------------------------------
+bool TomlStringProxy::equals(u32 length, const char* str) const
+{
+    CPPTOML_ASSERT(CPPTOML_NULL != str);
+    return (length == length_) && (0 == ::strncmp(str, str_, length_));
+}
+
+//
+template<>
+bool TomlTableProxy::tryGet<s8>(s8& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<s8>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<s16>(s16& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<s16>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<s32>(s32& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<s32>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<s64>(s64& x, const char* name) const
+{
+    CPPTOML_ASSERT(CPPTOML_NULL != name);
+    u32 length = static_cast<u32>(::strlen(name));
+    for(TomlTableProxy::Iterator itr = begin(); itr != end(); itr = next(itr)) {
+        TomlKeyValueProxy keyvalue = (*this)[itr];
+        if(!keyvalue.key().equals(length, name)) {
+            continue;
+        }
+        TomlValueProxy value = keyvalue.value();
+        if(TomlType::Integer != value.type()) {
+            continue;
+        }
+        TomlIntProxy i = value.value<TomlIntProxy>();
+        if(!i.valid_) {
+            return false;
+        }
+        x = i.value_;
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<u8>(u8& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<u8>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<u16>(u16& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<u16>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<u32>(u32& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<u32>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<u64>(u64& x, const char* name) const
+{
+    s64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<u64>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<f32>(f32& x, const char* name) const
+{
+    f64 t;
+    if(tryGet(t, name)) {
+        x = static_cast<f32>(t);
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<f64>(f64& x, const char* name) const
+{
+    CPPTOML_ASSERT(CPPTOML_NULL != name);
+    u32 length = static_cast<u32>(::strlen(name));
+    for(TomlTableProxy::Iterator itr = begin(); itr != end(); itr = next(itr)) {
+        TomlKeyValueProxy keyvalue = (*this)[itr];
+        if(!keyvalue.key().equals(length, name)) {
+            continue;
+        }
+        TomlValueProxy value = keyvalue.value();
+        if(TomlType::Float == value.type()) {
+            TomlFloatProxy f = value.value<TomlFloatProxy>();
+            if(!f.valid_) {
+                return false;
+            }
+            x = f.value_;
+            return true;
+        }
+        if(TomlType::Integer == value.type()) {
+            TomlIntProxy i = value.value<TomlIntProxy>();
+            if(!i.valid_) {
+                return false;
+            }
+            x = static_cast<f64>(i.value_);
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<TomlStringProxy>(TomlStringProxy& x, const char* name) const
+{
+    CPPTOML_ASSERT(CPPTOML_NULL != name);
+    u32 length = static_cast<u32>(::strlen(name));
+    for(TomlTableProxy::Iterator itr = begin(); itr != end(); itr = next(itr)) {
+        TomlKeyValueProxy keyvalue = (*this)[itr];
+        if(!keyvalue.key().equals(length, name)) {
+            continue;
+        }
+        TomlValueProxy value = keyvalue.value();
+        if(TomlType::String != value.type()) {
+            continue;
+        }
+        TomlStringProxy s = value.value<TomlStringProxy>();
+        if(!s.valid_) {
+            return false;
+        }
+        x = s;
+        return true;
+    }
+    return false;
+}
+
+template<>
+bool TomlTableProxy::tryGet<TomlTableProxy>(TomlTableProxy& x, const char* name) const
+{
+    CPPTOML_ASSERT(CPPTOML_NULL != name);
+    u32 length = static_cast<u32>(::strlen(name));
+    for(TomlTableProxy::Iterator itr = begin(); itr != end(); itr = next(itr)) {
+        TomlKeyValueProxy keyvalue = (*this)[itr];
+        if(!keyvalue.key().equals(length, name)) {
+            continue;
+        }
+        TomlValueProxy value = keyvalue.value();
+        if(TomlType::Table != value.type()) {
+            continue;
+        }
+        x = value.value<TomlTableProxy>();
+        return true;
+    }
+    return false;
+}
 } // namespace cpptoml

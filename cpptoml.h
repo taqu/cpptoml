@@ -179,6 +179,8 @@ struct TomlStringProxy
     bool valid_;
     u32 length_;
     const char* str_;
+
+    bool equals(u32 length, const char* str) const;
 };
 
 struct TomlDateTimeProxy
@@ -243,8 +245,15 @@ public:
     TomlStringProxy key() const;
     TomlValueProxy value() const;
 
-    inline u32 getKeyIndex() const{return key_;}
-    inline u32 getValueIndex() const{return value_;}
+    inline u32 getKeyIndex() const
+    {
+        return key_;
+    }
+    inline u32 getValueIndex() const
+    {
+        return value_;
+    }
+
 private:
     friend class TomlTableProxy;
 
@@ -281,12 +290,24 @@ class TomlTableProxy
 {
 public:
     using Iterator = u32;
+    TomlTableProxy()
+        : parser_(CPPTOML_NULL)
+        , index_(Invalid)
+    {
+    }
+
+    ~TomlTableProxy()
+    {
+    }
 
     u32 size() const;
     Iterator begin() const;
     Iterator next(Iterator iterator) const;
     Iterator end() const;
     TomlKeyValueProxy operator[](Iterator iterator) const;
+
+    template<class T>
+    bool tryGet(T& x, const char* name) const;
 
 private:
     friend class TomlValueProxy;
@@ -339,6 +360,11 @@ public:
     TomlParser(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL, void* user_data = CPPTOML_NULL);
     ~TomlParser();
 
+    bool parse(const char* head, const char* end)
+    {
+        return parse(reinterpret_cast<cursor>(head), reinterpret_cast<cursor>(end));
+    }
+
     bool parse(cursor head, cursor end);
     void clear();
     TomlTableProxy top() const;
@@ -384,12 +410,12 @@ private:
     static bool is_quated_key(UChar c);
     static bool is_unquated_key(UChar c);
     static bool is_table(UChar c);
-    
+
     static bool is_minus(f64 x);
 
     static bool check_overflow(s64 x0, s64 x1, s64 x2);
     static bool mul(s64& x, s64 base);
-    static bool add(s64& x,s64 x0, s64 x1);
+    static bool add(s64& x, s64 x0, s64 x1);
     static s64 from_digit(UChar c);
     static s64 from_hex(UChar c);
 
@@ -550,5 +576,33 @@ TomlTableProxy TomlValueProxy::value<TomlTableProxy>() const;
 template<>
 TomlArrayTableProxy TomlValueProxy::value<TomlArrayTableProxy>() const;
 
+//
+template<>
+bool TomlTableProxy::tryGet<s8>(s8& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<s16>(s16& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<s32>(s32& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<s64>(s64& x, const char* name) const;
+
+template<>
+bool TomlTableProxy::tryGet<u8>(u8& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<u16>(u16& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<u32>(u32& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<u64>(u64& x, const char* name) const;
+
+template<>
+bool TomlTableProxy::tryGet<f32>(f32& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<f64>(f64& x, const char* name) const;
+
+template<>
+bool TomlTableProxy::tryGet<TomlStringProxy>(TomlStringProxy& x, const char* name) const;
+template<>
+bool TomlTableProxy::tryGet<TomlTableProxy>(TomlTableProxy& x, const char* name) const;
 } // namespace cpptoml
 #endif // INC_CPPTOML_H_
