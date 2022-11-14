@@ -1,4 +1,4 @@
-#ifndef INC_CPPTOML_H_
+﻿#ifndef INC_CPPTOML_H_
 #define INC_CPPTOML_H_
 // clang-format off
 /*
@@ -57,552 +57,251 @@ For more information, please refer to <http://unlicense.org>
 @author t-sakai
 */
 #include <cstdint>
-#include <ctime>
+
+#include <tuple>
 
 namespace cpptoml
 {
 
 #ifndef CPPTOML_TYPES
 #    define CPPTOML_TYPES
-#    ifdef __cplusplus
-#        define CPPTOML_CPP
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
-using f32 = float;
-using f64 = double;
-
-using Char = char;
-using UChar = unsigned char;
-
-#    else
-#    endif
+#    ifndef CPPTOML_NULL
+#        define CPPTOML_NULL nullptr
+#    endif // CPPTOML_NULL
 #endif // CPPTOML_TYPES
 
 #ifdef _DEBUG
 #    define CPPTOML_DEBUG
 #endif
 
-#ifndef CPPTOML_NULL
-#    ifdef __cplusplus
-#        if 201103L <= __cplusplus || 1700 <= _MSC_VER
-#            define CPPTOML_NULL nullptr
-#        else
-#            define CPPTOML_NULL 0
-#        endif
-#    else
-#        define CPPTOML_NULL (void*)0
-#    endif
-#endif // CPPTOML_NULL
-
-typedef void* (*cpptoml_malloc)(size_t, void*);
-typedef void (*cpptoml_free)(void*, void*);
-
-static constexpr u32 Invalid = 0xFFFFFFFFU;
+typedef void* (*CPPTOML_MALLOC_TYPE)(size_t);
+typedef void (*CPPTOML_FREE_TYPE)(void*);
 
 class TomlParser;
 
-//--- TomlType
-//---------------------------------------
-enum class TomlType : u32
+/**
+ * @brief Toml Type
+ */
+enum class TomlType : uint32_t
 {
-    None = 0,
-    Table,
+    Table =0,
     Array,
-    ArrayTable,
     String,
-    DateTime,
-    Float,
     Integer,
-    Boolean,
+    Hex,
+    Oct,
+    Bin,
+    Float,
+    Inf,
+    NaN,
+    DateTime,
+    True,
+    False,
     Key,
     KeyValue,
+    Invalid,
 };
 
-struct TomlTable
-{
-    u32 size_;
-    u32 head_;
-};
-
-struct TomlArray
-{
-    u32 size_;
-    u32 head_;
-};
-
-struct TomlArrayTable
-{
-    u32 size_;
-    u32 head_;
-};
-
-struct TomlKeyValue
-{
-    u32 key_;
-    u32 value_;
-};
-
-struct TomlPositionLength
-{
-    u32 position_;
-    u32 length_;
-};
-
+/**
+ * @brief value type
+ */
 struct TomlValue
 {
-    u32 next_;
-    TomlType type_;
-    union
-    {
-        TomlTable table_;
-        TomlArray array_;
-        TomlArrayTable arrayTable_;
-        TomlKeyValue keyvalue_;
-        TomlPositionLength positionLength_;
-        s64 int_;
-        f64 float_;
-    };
+    uint64_t start_; //!< the start position of element
+    uint64_t size_;  //!< the size of element
+    uint32_t next_;  //!< the next element of aggretations
+    uint32_t type_;  //!< the type of element
 };
 
-//--- TomlProxy
-//---------------------------------------
-struct TomlStringProxy
+/**
+ * @brief Toml proxy
+ */
+struct TomlProxy
 {
-    bool valid_;
-    u32 length_;
-    const char* str_;
+    /**
+     * @brief validate this element
+     * @return true if this is valid
+     */
+    operator bool() const;
 
-    bool equals(u32 length, const char* str) const;
-};
-
-struct TomlDateTimeProxy
-{
-    enum class Type : s8
-    {
-        OffsetDateTime,
-        LocalDateTime,
-        LocalDate,
-        LocalTime,
-    };
-
-    bool valid_;
-    Type type_;
-    s32 year_;
-    s32 month_;
-    s32 day_;
-    s32 hour_;
-    s32 minute_;
-    s32 second_;
-    s32 millisecond_;
-    s32 offset_; //!< an UTC offset
-};
-
-struct TomlFloatProxy
-{
-    bool valid_;
-    f64 value_;
-};
-
-struct TomlIntProxy
-{
-    bool valid_;
-    s64 value_;
-};
-
-struct TomlBoolProxy
-{
-    bool valid_;
-    bool value_;
-};
-
-class TomlValueProxy
-{
-public:
+    /**
+     * @return type of this
+     */
     TomlType type() const;
-    template<class T>
-    T value() const {}
 
-private:
-    friend class TomlKeyValueProxy;
-    friend class TomlArrayProxy;
-    friend class TomlArrayTableProxy;
+    /**
+     * Indicates the size of element. In a case of the string type, it shows the length of the string. For excample "test", the size equals to 4, excepts characters `"`.
+     * @return size of this
+     */
+    uint64_t size() const;
 
-    const TomlParser* parser_;
-    u32 value_;
+    /**
+     * In typical usage, you can iterate children,
+     *
+     * ```cpp
+     * for(TomlProxy i=aggregation.begin(); i; i=i.next())
+     * ```
+     * @return the first element of aggrigations, like the object or array
+     */
+    TomlProxy begin() const;
+
+    /**
+     * @return the next element of aggrations
+     */
+    TomlProxy next() const;
+
+    /**
+     * @return key of an object's entry
+     */
+    TomlProxy key() const;
+    /**
+     * @return value of an object's entry
+     */
+    TomlProxy value() const;
+
+    /**
+     * @brief Get the value as string
+     * @param [out] str ... the result
+     * @return size of the result
+     */
+    uint64_t getString(char* str) const;
+
+    /**
+     * @brief Get the value as integer
+     * @return the value as integer
+     */
+    int64_t getInt64() const;
+    /**
+     * @brief Get the value as float
+     * @return the value as float
+     */
+    double getFloat64() const;
+
+    uint64_t value_;
+    const char* data_;
+    const TomlValue* values_;
 };
 
-class TomlKeyValueProxy
-{
-public:
-    TomlStringProxy key() const;
-    TomlValueProxy value() const;
-
-    inline u32 getKeyIndex() const
-    {
-        return key_;
-    }
-    inline u32 getValueIndex() const
-    {
-        return value_;
-    }
-
-private:
-    friend class TomlTableProxy;
-
-    const TomlParser* parser_;
-    u32 key_;
-    u32 value_;
-};
-
-class TomlArrayProxy
-{
-public:
-    using Iterator = u32;
-
-    u32 size() const;
-    Iterator begin() const;
-    Iterator next(Iterator iterator) const;
-    Iterator end() const;
-    TomlValueProxy operator[](Iterator iterator) const;
-
-private:
-    friend class TomlValueProxy;
-    friend class TomlParser;
-
-    TomlArrayProxy(const TomlParser* parser, u32 index)
-        : parser_(parser)
-        , index_(index)
-    {
-    }
-    const TomlParser* parser_;
-    u32 index_;
-};
-
-class TomlTableProxy
-{
-public:
-    using Iterator = u32;
-    TomlTableProxy()
-        : parser_(CPPTOML_NULL)
-        , index_(Invalid)
-    {
-    }
-
-    ~TomlTableProxy()
-    {
-    }
-
-    u32 size() const;
-    Iterator begin() const;
-    Iterator next(Iterator iterator) const;
-    Iterator end() const;
-    TomlKeyValueProxy operator[](Iterator iterator) const;
-
-    template<class T>
-    bool tryGet(T& x, const char* name) const;
-
-private:
-    friend class TomlValueProxy;
-    friend class TomlParser;
-
-    TomlTableProxy(const TomlParser* parser, u32 index)
-        : parser_(parser)
-        , index_(index)
-    {
-    }
-
-    const TomlParser* parser_;
-    u32 index_;
-};
-
-class TomlArrayTableProxy
-{
-public:
-    using Iterator = u32;
-
-    u32 size() const;
-    Iterator begin() const;
-    Iterator next(Iterator iterator) const;
-    Iterator end() const;
-    TomlValueProxy operator[](Iterator iterator) const;
-
-private:
-    friend class TomlValueProxy;
-    friend class TomlParser;
-
-    TomlArrayTableProxy(const TomlParser* parser, u32 index)
-        : parser_(parser)
-        , index_(index)
-    {
-    }
-
-    const TomlParser* parser_;
-    u32 index_;
-};
-
-//--- TomlParser
-//---------------------------------------
+/**
+ * @brief Toml Parser
+ */
 class TomlParser
 {
 public:
-    static constexpr u32 MaxNests = 64;
-    static constexpr u32 ExpandSize = 4 * 4096;
-    using cursor = const UChar*;
+    static constexpr uint32_t Invalid = static_cast<uint32_t>(-1);
+    static constexpr std::tuple<const char*, uint32_t> InvalidPair = {CPPTOML_NULL, Invalid};
+    static constexpr std::tuple<const char*, uint32_t, uint32_t> InvalidTuple = {CPPTOML_NULL, Invalid, Invalid};
+    static constexpr uint32_t Expand = 128;
+    static constexpr int32_t MaxNesting = 128;
 
-    TomlParser(cpptoml_malloc allocator = CPPTOML_NULL, cpptoml_free deallocator = CPPTOML_NULL, void* user_data = CPPTOML_NULL);
+    TomlParser(CPPTOML_MALLOC_TYPE allocator = CPPTOML_NULL, CPPTOML_FREE_TYPE deallocator = CPPTOML_NULL);
     ~TomlParser();
 
-    bool parse(const char* head, const char* end)
-    {
-        return parse(reinterpret_cast<cursor>(head), reinterpret_cast<cursor>(end));
-    }
-
-    bool parse(cursor head, cursor end);
-    void clear();
-    TomlTableProxy top() const;
+    bool parse(const char* begin, const char* end);
+    TomlProxy root() const;
 
 private:
     TomlParser(const TomlParser&) = delete;
     TomlParser& operator=(const TomlParser&) = delete;
 
-    friend class TomlValueProxy;
-    friend class TomlKeyValueProxy;
-    friend class TomlArrayProxy;
-    friend class TomlTableProxy;
-    friend class TomlArrayTableProxy;
-
-    struct Result
+    enum class KeyPlace
     {
-        cursor cursor_;
-        u32 index_;
+        KeyValue,
+        Table,
+        ArrayTable,
     };
 
-    struct ResultFloat
-    {
-        cursor cursor_;
-        f64 value_;
-    };
+    int64_t next_symbol(const char*& str) const;
+    bool parse_unquated_key_char(const char*& str) const;
+    bool basic_char(const char*& str) const;
+    bool literal_char(const char*& str) const;
+    bool escaped(const char*& str) const;
+    bool parse_2hexdig(const char*& str) const;
+    bool parse_4hexdig(const char*& str) const;
+    bool parse_8hexdig(const char*& str) const;
+    static bool hexgidit(char c);
+    static bool digit(char c);
 
-    struct ResultInt
-    {
-        cursor cursor_;
-        s64 value_;
-    };
+    const char* bom(const char* str) const;
+    const char* newline(const char* str) const;
+    const char* whitespace(const char* str) const;
+    const char* comment(const char* str) const;
+    const char* ws_comment_newline(const char* str) const;
 
-    static bool is_alpha(UChar c);
-    static bool is_digit(UChar c);
-    static bool is_hexdigit(UChar c);
-    static bool is_digit19(UChar c);
-    static bool is_digit07(UChar c);
-    static bool is_digit01(UChar c);
-    static bool is_whitespace(UChar c);
-    static bool is_basicchar(UChar c);
-    static bool is_newline(UChar c);
+    const char* parse_non_ascii(const char* str) const;
 
-    static bool is_quated_key(UChar c);
-    static bool is_unquated_key(UChar c);
-    static bool is_table(UChar c);
+    const char* parse_expression(const char* str);
+    std::tuple<const char*, uint32_t> parse_keyvalue(const char* str);
+    bool keyvalue(const char* str) const;
+    std::tuple<const char*, uint32_t, uint32_t> parse_key(const char* str, uint32_t current, KeyPlace place);
+    const char* parse_unquated_key(const char* str) const;
 
-    static bool is_minus(f64 x);
+    std::tuple<const char*, uint32_t> parse_value(const char* str);
+    bool value(const char* str) const;
 
-    static bool check_overflow(s64 x0, s64 x1, s64 x2);
-    static bool mul(s64& x, s64 base);
-    static bool add(s64& x, s64 x0, s64 x1);
-    static s64 from_digit(UChar c);
-    static s64 from_hex(UChar c);
+    const char* parse_basic_string(const char* str);
+    const char* parse_literal_string(const char* str);
 
-    cursor skip_bom(cursor str);
-    cursor skip_newline(cursor str);
-    cursor skip_spaces(cursor str);
-    cursor skip_utf8_1(cursor str);
-    cursor skip_utf8_2(cursor str);
-    cursor skip_utf8_3(cursor str);
-    cursor skip_comment(cursor str);
+    const char* parse_ml_basic_string(const char* str);
+    const char* parse_mlb_content(const char* str);
+    const char* parse_mlb_escaped_nl(const char* str);
+    bool parse_mlb_quotes(const char*& str);
 
-    cursor parse_expression(cursor str);
-    cursor parse_keyval(cursor str);
-    cursor parse_table(cursor str);
+    const char* parse_ml_literal_string(const char* str);
+    const char* parse_mll_content(const char* str);
+    bool parse_mll_quotes(const char*& str);
 
-    Result parse_key(cursor str);
-    cursor parse_quated_key(cursor str);
-    cursor parse_unquated_key(cursor str);
-    cursor parse_dot_sep(cursor str);
-    cursor parse_keyval_sep(cursor str);
-    Result parse_val(cursor str);
-    cursor parse_basic_string(cursor str);
-    cursor parse_basic_char(cursor str);
-    cursor parse_non_ascii(cursor str);
-    cursor parse_non_eol(cursor str);
-    cursor parse_escaped(cursor str);
-    cursor parse_4HEXDIG(cursor str);
-    cursor parse_8HEXDIG(cursor str);
-    cursor parse_literal_string(cursor str);
-    cursor parse_literal_char(cursor str);
+    std::tuple<const char*, uint32_t> parse_table(const char* str);
+    std::tuple<const char*, uint32_t> parse_std_table(const char* str);
+    std::tuple<const char*, uint32_t> parse_array_table(const char* str);
 
-    cursor parse_string(cursor str);
-    cursor parse_ml_basic_string(cursor str);
-    cursor parse_ml_basic_body(cursor str);
-    cursor parse_mlb_quotes(cursor str);
-    cursor parse_mlb_content(cursor str);
-    cursor parse_mlb_escaped_nl(cursor str);
-    cursor parse_ml_literal_string(cursor str);
-    cursor parse_ml_literal_body(cursor str);
-    cursor parse_mll_quotes(cursor str);
-    cursor parse_mll_content(cursor str);
+    const char* parse_true(const char* str);
+    const char* parse_false(const char* str);
 
-    cursor parse_boolean(cursor str);
+    std::tuple<const char*, uint32_t> parse_array(const char* str);
+    std::tuple<const char*, uint32_t> parse_inline_table(const char* str);
 
-    Result parse_array(cursor str);
-    cursor parse_array_values(cursor str, u32 array);
-    cursor parse_ws_comment_newline(cursor str);
+    std::tuple<const char*, uint32_t> parse_number(const char* str);
+    TomlType number_type(const char* str);
+    std::tuple<const char*, uint32_t> parse_integer(const char* str);
+    std::tuple<const char*, uint32_t> parse_hex(const char* str);
+    std::tuple<const char*, uint32_t> parse_oct(const char* str);
+    std::tuple<const char*, uint32_t> parse_bin(const char* str);
+    std::tuple<const char*, uint32_t> parse_float(const char* str);
+    const char* parse_frac(const char* str);
+    const char* parse_exp(const char* str);
+    const char* parse_zero_prefixable_int(const char* str);
+    std::tuple<const char*, uint32_t> parse_inf(const char* str);
+    std::tuple<const char*, uint32_t> parse_nan(const char* str);
+    std::tuple<const char*, uint32_t> parse_datetime(const char* str);
+    const char* parse_fulldate(const char* str);
+    const char* parse_partial_time(const char* str);
+    const char* parse_timeoffset(const char* str);
 
-    Result parse_inline_table(cursor str);
-    cursor parse_inline_table_keyvals(cursor str);
+    static bool strcmp(const char* s0, const char* e0, const char* s1, const char* e1);
+    uint32_t find_keyvalue(uint32_t table, const char* begin, const char* end) const;
+    uint32_t find_table(uint32_t array) const;
+    uint32_t find_table_node(uint32_t node) const;
+    bool has_child_table(uint32_t table) const;
 
-    cursor parse_date_time(cursor str);
-    cursor parse_offset_date_time(cursor str);
-    cursor parse_local_date_time(cursor str);
-    cursor parse_local_date(cursor str);
-    cursor parse_local_time(cursor str);
-    cursor parse_time_delim(cursor str);
-    cursor parse_full_date(cursor str);
-    cursor parse_full_time(cursor str);
-    cursor parse_partial_time(cursor str);
-    cursor parse_date_fullyear(cursor str);
-    cursor parse_date_month(cursor str);
-    cursor parse_date_mday(cursor str);
-    cursor parse_time_hour(cursor str);
-    cursor parse_time_minute(cursor str);
-    cursor parse_time_second(cursor str);
-    cursor parse_time_secfrac(cursor str);
+    CPPTOML_MALLOC_TYPE allocator_;
+    CPPTOML_FREE_TYPE deallocator_;
+    const char* begin_;
+    const char* end_;
 
-    ResultFloat parse_float(cursor str);
-    ResultFloat parse_special_float(cursor str);
-    ResultFloat parse_float_int_part(cursor str);
-    ResultInt parse_dec_int(cursor str);
-    ResultInt parse_unsigned_dec_int(cursor str, bool minus);
-    ResultInt parse_exp(cursor str);
-    ResultInt parse_float_exp_part(cursor str);
-    ResultInt parse_zero_prefixable_int(cursor str);
-    ResultFloat parse_frac(cursor str);
+    void clear();
+    uint32_t add();
+    uint32_t add_keyvalue(const char* str, const char* end);
+    uint32_t add_value(TomlType type, const char* str, const char* end);
+    uint32_t add_table();
+    uint32_t add_array();
+    void append(uint32_t parent, uint32_t value);
 
-    ResultInt parse_integer(cursor str);
-    ResultInt parse_hex_prefix(cursor str);
-    ResultInt parse_oct_prefix(cursor str);
-    ResultInt parse_bin_prefix(cursor str);
-
-    cursor parse_std_table(cursor str);
-    cursor parse_array_table(cursor str);
-
-    u32 length(cursor begin, cursor end) const;
-    u32 create_value(cursor begin, cursor end, TomlType type);
-    u32 create_key(cursor begin, cursor end);
-    u32 create_keyvalue(u32 key, u32 value);
-    u32 create_table();
-    u32 create_array_table();
-    u32 create_array();
-    u32 create_string(cursor begin, cursor end);
-    u32 create_float(f64 value);
-    u32 create_int(s64 value);
-
-    const TomlValue& get_value(u32 index) const;
-    TomlValue& get_value(u32 index);
-
-    const char* str(u32 position) const;
-    u32 allocate();
-    void reset_table();
-    void add_table_value(u32 table, u32 value);
-    void add_array_value(u32 array, u32 value);
-
-    TomlStringProxy get_string(u32 value) const;
-    TomlDateTimeProxy get_datetime(u32 value) const;
-    TomlFloatProxy get_float(u32 value) const;
-    TomlIntProxy get_int(u32 value) const;
-    TomlBoolProxy get_bool(u32 value) const;
-
-    u32 traverse_tables(u32 key_chain, TomlType type);
-    u32 get_last_table(u32 array_table);
-
-    u32 find_array_table(u32 key_chain) const;
-    bool equal(const TomlPositionLength& x0, const TomlPositionLength& x1) const;
-    bool compare_key_chain(u32 key0, u32 key1) const;
-    bool validate_table_key_chain(u32 key_chain) const;
-    bool validate_array_key_chain(u32 key_chain) const;
-    bool check_array_mixed_types(u32 array) const;
-
-    cpptoml_malloc allocator_;
-    cpptoml_free deallocator_;
-    void* user_data_;
-    cursor begin_;
-    cursor current_;
-    cursor end_;
-
-    u32 capacity_;
-    u32 size_;
-    TomlValue* buffer_;
-    u32 table_;
-    u32 array_table_;
+    uint32_t current_;
+    uint32_t capacity_; //!< capacity of buffer
+    uint32_t size_;     //!< current size of buffer
+    TomlValue* values_; //!< elements of Json
 };
 
-template<>
-TomlStringProxy TomlValueProxy::value<TomlStringProxy>() const;
-
-template<>
-TomlDateTimeProxy TomlValueProxy::value<TomlDateTimeProxy>() const;
-
-template<>
-TomlFloatProxy TomlValueProxy::value<TomlFloatProxy>() const;
-
-template<>
-TomlIntProxy TomlValueProxy::value<TomlIntProxy>() const;
-
-template<>
-TomlBoolProxy TomlValueProxy::value<TomlBoolProxy>() const;
-
-template<>
-TomlArrayProxy TomlValueProxy::value<TomlArrayProxy>() const;
-
-template<>
-TomlTableProxy TomlValueProxy::value<TomlTableProxy>() const;
-
-template<>
-TomlArrayTableProxy TomlValueProxy::value<TomlArrayTableProxy>() const;
-
-//
-template<>
-bool TomlTableProxy::tryGet<s8>(s8& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<s16>(s16& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<s32>(s32& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<s64>(s64& x, const char* name) const;
-
-template<>
-bool TomlTableProxy::tryGet<u8>(u8& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<u16>(u16& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<u32>(u32& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<u64>(u64& x, const char* name) const;
-
-template<>
-bool TomlTableProxy::tryGet<f32>(f32& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<f64>(f64& x, const char* name) const;
-
-template<>
-bool TomlTableProxy::tryGet<TomlStringProxy>(TomlStringProxy& x, const char* name) const;
-template<>
-bool TomlTableProxy::tryGet<TomlTableProxy>(TomlTableProxy& x, const char* name) const;
 } // namespace cpptoml
 #endif // INC_CPPTOML_H_

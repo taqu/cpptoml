@@ -11,6 +11,117 @@
 
 namespace
 {
+void traverse_object(cpptoml::TomlProxy proxy);
+void traverse_array(cpptoml::TomlProxy proxy);
+void traverse_keyvalue(cpptoml::TomlProxy proxy);
+void traverse_string(cpptoml::TomlProxy proxy);
+void traverse_number(cpptoml::TomlProxy proxy);
+void traverse_integer(cpptoml::TomlProxy proxy);
+void traverse_true(cpptoml::TomlProxy proxy);
+void traverse_false(cpptoml::TomlProxy proxy);
+
+void traverse(cpptoml::TomlProxy proxy)
+{
+    using namespace cpptoml;
+    switch(proxy.type()) {
+    case TomlType::Table:
+        traverse_object(proxy);
+        break;
+    case TomlType::Array:
+        traverse_array(proxy);
+        break;
+    case TomlType::KeyValue:
+        traverse_keyvalue(proxy);
+        break;
+    case TomlType::String:
+        traverse_string(proxy);
+        break;
+    case TomlType::Float:
+        traverse_number(proxy);
+        break;
+    case TomlType::Integer:
+        traverse_integer(proxy);
+        break;
+    case TomlType::True:
+        traverse_true(proxy);
+        break;
+    case TomlType::False:
+        traverse_false(proxy);
+        break;
+        break;
+    default:
+        break;
+    }
+}
+
+void traverse_object(cpptoml::TomlProxy proxy)
+{
+    using namespace cpptoml;
+    printf("{");
+    for(TomlProxy i = proxy.begin(); i; i = i.next()) {
+        char key[128];
+        i.key().getString(key);
+        printf("%s: ", key);
+        traverse(i.value());
+        printf(", ");
+    }
+    printf("}");
+}
+
+void traverse_array(cpptoml::TomlProxy proxy)
+{
+    using namespace cpptoml;
+    printf("[");
+    for(TomlProxy i = proxy.begin(); i; i = i.next()) {
+        traverse(i);
+        printf(", ");
+    }
+    printf("]");
+}
+
+void traverse_keyvalue(cpptoml::TomlProxy proxy)
+{
+    char key[128];
+    proxy.key().getString(key);
+    printf("%s: ", key);
+    traverse(proxy.value());
+}
+
+void traverse_string(cpptoml::TomlProxy proxy)
+{
+    // correct way to acuire a string
+    uint64_t length = proxy.size();
+    char* value = reinterpret_cast<char*>(::malloc(length + 1));
+    if(NULL == value) {
+        return;
+    }
+    proxy.getString(value);
+    printf("%s", value);
+    ::free(value);
+}
+
+void traverse_number(cpptoml::TomlProxy proxy)
+{
+    double value = proxy.getFloat64();
+    printf("%lf", value);
+}
+
+void traverse_integer(cpptoml::TomlProxy proxy)
+{
+    int64_t value = proxy.getInt64();
+    printf("%ld", value);
+}
+
+void traverse_true(cpptoml::TomlProxy)
+{
+    printf("true");
+}
+
+void traverse_false(cpptoml::TomlProxy)
+{
+    printf("false");
+}
+
 class Directory
 {
 public:
@@ -92,144 +203,9 @@ std::string Directory::path() const
 #endif
 }
 
-void print(const cpptoml::TomlTableProxy& table, cpptoml::u32 indent);
-
-void put_indent(cpptoml::u32 indent)
+bool test_valid(uint32_t no, const char* filepath, bool )
 {
-    indent *= 4;
-    for(cpptoml::u32 i = 0; i < indent; ++i) {
-        putchar(' ');
-    }
-}
-
-void puts(cpptoml::u32 indent, cpptoml::u32 length, const char* str)
-{
-    put_indent(indent);
-    for(cpptoml::u32 i = 0; i < length; ++i) {
-        putchar(str[i]);
-    }
-}
-
-void print(cpptoml::u32 indent, const cpptoml::TomlStringProxy& value)
-{
-    puts(indent, value.length_, value.str_);
-}
-
-void print(cpptoml::u32 indent, const cpptoml::TomlDateTimeProxy& value)
-{
-    put_indent(indent);
-    printf("%d-%d-%d", value.year_, value.month_, value.day_);
-}
-
-void print(cpptoml::u32 indent, const cpptoml::TomlFloatProxy& value)
-{
-    put_indent(indent);
-    printf("%f", value.value_);
-}
-
-void print(cpptoml::u32 indent, const cpptoml::TomlIntProxy& value)
-{
-    put_indent(indent);
-#ifdef _WIN32
-    printf("%lld", value.value_);
-#else
-    printf("%ld", value.value_);
-#endif
-}
-
-void print(cpptoml::u32 indent, const cpptoml::TomlBoolProxy& value)
-{
-    put_indent(indent);
-    printf("%s", value.value_ ? "true" : "false");
-}
-
-void print(const cpptoml::TomlArrayProxy& array, cpptoml::u32 indent)
-{
-    ::printf("[\n");
-    for(cpptoml::u32 itr = array.begin(); itr != array.end(); itr = array.next(itr)) {
-        cpptoml::TomlValueProxy value = array[itr];
-        switch(value.type()) {
-        case cpptoml::TomlType::Table:
-            print(value.value<cpptoml::TomlTableProxy>(), indent + 1);
-            break;
-        case cpptoml::TomlType::Array:
-        case cpptoml::TomlType::ArrayTable:
-            print(value.value<cpptoml::TomlArrayProxy>(), indent + 1);
-            break;
-        case cpptoml::TomlType::String:
-            print(indent + 1, value.value<cpptoml::TomlStringProxy>());
-            ::printf(",\n");
-            break;
-        case cpptoml::TomlType::DateTime:
-            print(indent + 1, value.value<cpptoml::TomlDateTimeProxy>());
-            ::printf(",\n");
-            break;
-        case cpptoml::TomlType::Float:
-            print(indent + 1, value.value<cpptoml::TomlFloatProxy>());
-            ::printf(",\n");
-            break;
-        case cpptoml::TomlType::Integer:
-            print(indent + 1, value.value<cpptoml::TomlIntProxy>());
-            ::printf(",\n");
-            break;
-        case cpptoml::TomlType::Boolean:
-            print(indent + 1, value.value<cpptoml::TomlBoolProxy>());
-            ::printf(",\n");
-            break;
-        default:
-            assert(false);
-            break;
-        }
-    }
-    put_indent(indent);
-    ::printf("]\n");
-}
-
-void print(const cpptoml::TomlTableProxy& table, cpptoml::u32 indent)
-{
-    ::printf("{\n");
-    for(cpptoml::u32 itr = table.begin(); itr != table.end(); itr = table.next(itr)) {
-        cpptoml::TomlKeyValueProxy keyvalue = table[itr];
-        cpptoml::TomlStringProxy key = keyvalue.key();
-        cpptoml::TomlValueProxy value = keyvalue.value();
-        puts(indent, key.length_, key.str_);
-        ::printf(" = ");
-        switch(value.type()) {
-        case cpptoml::TomlType::Table:
-            print(value.value<cpptoml::TomlTableProxy>(), indent + 1);
-            break;
-        case cpptoml::TomlType::Array:
-        case cpptoml::TomlType::ArrayTable:
-            print(value.value<cpptoml::TomlArrayProxy>(), indent + 1);
-            break;
-        case cpptoml::TomlType::String:
-            print(0, value.value<cpptoml::TomlStringProxy>());
-            break;
-        case cpptoml::TomlType::DateTime:
-            print(0, value.value<cpptoml::TomlDateTimeProxy>());
-            break;
-        case cpptoml::TomlType::Float:
-            print(0, value.value<cpptoml::TomlFloatProxy>());
-            break;
-        case cpptoml::TomlType::Integer:
-            print(0, value.value<cpptoml::TomlIntProxy>());
-            break;
-        case cpptoml::TomlType::Boolean:
-            print(0, value.value<cpptoml::TomlBoolProxy>());
-            break;
-        default:
-            assert(false);
-            break;
-        }
-        putchar('\n');
-    }
-    put_indent(indent);
-    ::printf("}\n");
-}
-
-bool test_valid(const char* filepath, bool print_result)
-{
-    printf("%s\n", filepath);
+    printf("[%d] %s\n", no, filepath);
 #ifdef _WIN32
     HANDLE file = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if(nullptr == file) {
@@ -257,7 +233,7 @@ bool test_valid(const char* filepath, bool print_result)
         size = s.st_size;
     }
 #endif
-    cpptoml::u8* buffer = reinterpret_cast<cpptoml::u8*>(::malloc(sizeof(cpptoml::u8) * size));
+    char* buffer = reinterpret_cast<char*>(::malloc(sizeof(char) * size));
 
 #ifdef _WIN32
     if(!ReadFile(file, buffer, size, &size, NULL)) {
@@ -275,18 +251,13 @@ bool test_valid(const char* filepath, bool print_result)
 
     cpptoml::TomlParser parser;
     bool result = parser.parse(buffer, buffer + size);
-    if(result) {
-        if(print_result) {
-            print(parser.top(), 0);
-        }
-    }
     ::free(buffer);
     return result;
 }
 
-bool test_invalid(const char* filepath)
+bool test_invalid(uint32_t no, const char* filepath)
 {
-    printf("%s\n", filepath);
+    printf("[%d] %s\n", no, filepath);
 #ifdef _WIN32
     HANDLE file = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if(nullptr == file) {
@@ -314,7 +285,7 @@ bool test_invalid(const char* filepath)
         size = s.st_size;
     }
 #endif
-    cpptoml::u8* buffer = reinterpret_cast<cpptoml::u8*>(::malloc(sizeof(cpptoml::u8) * size));
+    char* buffer = reinterpret_cast<char*>(::malloc(sizeof(char) * size));
 
 #ifdef _WIN32
     if(!ReadFile(file, buffer, size, &size, NULL)) {
@@ -352,16 +323,17 @@ TEST_CASE("TestToml::Valid")
         return;
     }
 #endif
-    int32_t count = 0;
-    static const int32_t skip = 0;
+    uint32_t count = 0;
+    static const uint32_t skip = 0;
     do {
-        ++count;
         if(count < skip) {
+            ++count;
             continue;
         }
         std::string path = directory.path();
-        bool result = test_valid(path.c_str(), false);
+        bool result = test_valid(count, path.c_str(), false);
         EXPECT_TRUE(result);
+        ++count;
     } while(directory.next());
     directory.close();
 }
@@ -382,27 +354,43 @@ TEST_CASE("TestToml::InValid")
 #endif
 
     int32_t count = 0;
-    static const int32_t skip = 0;
+    static const int32_t skip = 46;
     do {
-        ++count;
         if(count < skip) {
+            ++count;
             continue;
         }
         std::string path = directory.path();
-        bool result = test_invalid(path.c_str());
+        bool result = test_invalid(count, path.c_str());
         EXPECT_TRUE(result);
+        ++count;
     } while(directory.next());
     directory.close();
 }
 #endif
 
-#if 1
 TEST_CASE("TestToml::PrintValues")
 {
-    std::string path;
-    path = "../toml-test/tests/valid/empty.toml";
-    bool result;
-    result = test_valid(path.c_str(), true);
+    std::string path = "../test00.toml";
+    FILE* f = fopen(path.c_str(), "rb");
+    if(NULL == f) {
+        return;
+    }
+    struct stat s;
+    fstat(fileno(f), &s);
+    size_t size = s.st_size;
+    char* data = (char*)::malloc(size);
+    if(NULL == data || (0 < size && fread(data, size, 1, f) <= 0)) {
+        fclose(f);
+        ::free(data);
+        return;
+    }
+    fclose(f);
+    cpptoml::TomlParser parser;
+    bool result = parser.parse(data, data + size);
     EXPECT_TRUE(result);
+    cpptoml::TomlProxy proxy = parser.root();
+    traverse(proxy);
+    ::free(data);
 }
-#endif
+
