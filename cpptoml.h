@@ -109,7 +109,7 @@ struct TomlValue
 {
     uint64_t start_; //!< the start position of element
     uint64_t size_;  //!< the size of element
-    uint32_t next_;  //!< the next element of aggretations
+    uint32_t next_;  //!< the next element of aggregations
     uint32_t type_;  //!< the type of element
 };
 
@@ -141,12 +141,12 @@ struct TomlProxy
      * ```cpp
      * for(TomlProxy i=aggregation.begin(); i; i=i.next())
      * ```
-     * @return the first element of aggrigations, like the object or array
+     * @return the first element of aggregations, like the object or array
      */
     TomlProxy begin() const;
 
     /**
-     * @return the next element of aggrations
+     * @return the next element of aggregations
      */
     TomlProxy next() const;
 
@@ -171,6 +171,7 @@ struct TomlProxy
      * @return the value as integer
      */
     int64_t getInt64() const;
+    
     /**
      * @brief Get the value as float
      * @return the value as float
@@ -194,12 +195,25 @@ public:
     static constexpr uint32_t Expand = 128;
     static constexpr int32_t MaxNesting = 128;
 
+    /**
+     * @param [in] allocator ... custom allocator
+     * @param [in] deallocator ... custom deallocator
+     */
     TomlParser(CPPTOML_MALLOC_TYPE allocator = CPPTOML_NULL, CPPTOML_FREE_TYPE deallocator = CPPTOML_NULL);
+    
     ~TomlParser();
 
+    /**
+     * @return true if succeeded
+     * @param [in] begin ...
+     * @param [in] end ...
+     */
     bool parse(const char* begin, const char* end);
-    TomlProxy root() const;
 
+    /**
+     * @return root object of the document
+     */
+    TomlProxy root() const;
 private:
     TomlParser(const TomlParser&) = delete;
     TomlParser& operator=(const TomlParser&) = delete;
@@ -297,7 +311,7 @@ private:
     uint32_t add_array();
     void append(uint32_t parent, uint32_t value);
 
-    uint32_t current_;
+    uint32_t current_; //!< current table
     uint32_t capacity_; //!< capacity of buffer
     uint32_t size_;     //!< current size of buffer
     TomlValue* values_; //!< elements of Json
