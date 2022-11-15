@@ -109,7 +109,11 @@ void traverse_number(cpptoml::TomlProxy proxy)
 void traverse_integer(cpptoml::TomlProxy proxy)
 {
     int64_t value = proxy.getInt64();
+#ifdef _MSC_VER
+    printf("%lld", value);
+#else
     printf("%ld", value);
+#endif
 }
 
 void traverse_true(cpptoml::TomlProxy)
@@ -315,11 +319,11 @@ TEST_CASE("TestToml::Valid")
 {
     Directory directory;
 #ifdef _WIN32
-    if(!directory.open("..\\toml-test\\tests\\valid\\", ".toml")) {
+    if(!directory.open("..\\..\\toml-test\\tests\\valid\\", ".toml")) {
         return;
     }
 #else
-    if(!directory.open("../toml-test/tests/valid/", ".toml")) {
+    if(!directory.open("../../toml-test/tests/valid/", ".toml")) {
         return;
     }
 #endif
@@ -344,17 +348,17 @@ TEST_CASE("TestToml::InValid")
 {
     Directory directory;
 #ifdef _WIN32
-    if(!directory.open("..\\toml-test\\tests\\invalid\\", ".toml")) {
+    if(!directory.open("..\\..\\toml-test\\tests\\invalid\\", ".toml")) {
         return;
     }
 #else
-    if(!directory.open("../toml-test/tests/invalid/", ".toml")) {
+    if(!directory.open("../../toml-test/tests/invalid/", ".toml")) {
         return;
     }
 #endif
 
     int32_t count = 0;
-    static const int32_t skip = 46;
+    static const int32_t skip = 0;
     do {
         if(count < skip) {
             ++count;
@@ -371,7 +375,7 @@ TEST_CASE("TestToml::InValid")
 
 TEST_CASE("TestToml::PrintValues")
 {
-    std::string path = "../test00.toml";
+    std::string path = "../../test00.toml";
     FILE* f = fopen(path.c_str(), "rb");
     if(NULL == f) {
         return;

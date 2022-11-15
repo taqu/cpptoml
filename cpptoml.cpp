@@ -160,47 +160,47 @@ namespace
         return validate(proxy.value());
     }
 
-    bool validate_string(cpptoml::TomlProxy proxy)
+    bool validate_string(cpptoml::TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_integer(cpptoml::TomlProxy proxy)
+    bool validate_integer(cpptoml::TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_hex(TomlProxy proxy)
+    bool validate_hex(TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_oct(TomlProxy proxy)
+    bool validate_oct(TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_bin(TomlProxy proxy)
+    bool validate_bin(TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_float(cpptoml::TomlProxy proxy)
+    bool validate_float(cpptoml::TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_inf(TomlProxy proxy)
+    bool validate_inf(TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_nan(TomlProxy proxy)
+    bool validate_nan(TomlProxy /*proxy*/)
     {
         return true;
     }
 
-    bool validate_datetime(TomlProxy proxy)
+    bool validate_datetime(TomlProxy /*proxy*/)
     {
         return true;
     }
@@ -289,17 +289,20 @@ int64_t TomlProxy::getInt64() const
 
 double TomlProxy::getFloat64() const
 {
+    if (values_[value_].size_ <= 0) {
+        return 0.0;
+    }
     const char* first = data_ + values_[value_].start_;
 #if _MSC_VER
     const char* last = first + values_[value_].size_;
-    double value = 0;
+    double value = 0.0;
     std::from_chars(first, last, value);
 #else
     char buffer[127];
     uint64_t size = values_[value_].size_ < 128ULL ? values_[value_].size_ : 127ULL;
     ::memcpy(buffer, first, size);
     buffer[size] = '\0';
-    double value = strtod(buffer, CPPJSON_NULL);
+    double value = strtod(buffer, CPPTOML_NULL);
 #endif
     return value;
 }
@@ -555,9 +558,9 @@ bool TomlParser::escaped(const char*& str) const
     case 0x75:
         str = next + 1;
         return parse_4hexdig(str);
-    case 0x78:
-        str = next + 1;
-        return parse_2hexdig(str);
+    //case 0x78:
+    //    str = next + 1;
+    //    return parse_2hexdig(str);
     }
     return false;
 }
@@ -854,7 +857,7 @@ std::tuple<const char*, uint32_t, uint32_t> TomlParser::parse_key(const char* st
                     if(static_cast<uint32_t>(TomlType::Table) != values_[table].type_) {
                         return InvalidTuple;
                     }
-                    if(!has_child_table(table)) {
+                    if(!has_child_table(static_cast<uint32_t>(table))) {
                         return InvalidTuple;
                     }
                     return {str, exist, current};
@@ -901,12 +904,13 @@ std::tuple<const char*, uint32_t, uint32_t> TomlParser::parse_key(const char* st
         } else {
             uint32_t keyvalue = add_keyvalue(begin, end);
             if(KeyPlace::ArrayTable == place) {
-                uint32_t array = add_array();
-                values_[keyvalue].size_ = array;
-                append(current, keyvalue);
+                //uint32_t array = add_array();
+                //values_[keyvalue].size_ = array;
+                //append(current, keyvalue);
 
                 uint32_t table = add_table();
-                append(array, table);
+                values_[keyvalue].size_ = table;
+                append(current, keyvalue);
                 current = table;
 
             } else {
@@ -1438,10 +1442,8 @@ TomlType TomlParser::number_type(const char* str)
             return TomlType::Invalid;
         }
     }
-    bool top_zero = false;
     switch(str[0]) {
     case '0':
-        top_zero = true;
         if((str + 1) < end_) {
             switch(str[1]) {
             case 'x':
@@ -1987,7 +1989,7 @@ bool TomlParser::has_child_table(uint32_t table) const
     if(Invalid == values_[table].start_) {
         return false;
     }
-    uint32_t node = values_[table].start_;
+    uint32_t node = static_cast<uint32_t>(values_[table].start_);
     while(Invalid != node) {
         CPPTOML_ASSERT(static_cast<uint32_t>(TomlType::KeyValue) == values_[node].type_);
         if (static_cast<uint32_t>(TomlType::Table) == values_[values_[node].size_].type_) {

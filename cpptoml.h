@@ -57,7 +57,7 @@ For more information, please refer to <http://unlicense.org>
 @author t-sakai
 */
 #include <cstdint>
-
+#include <cstddef>
 #include <tuple>
 
 namespace cpptoml
