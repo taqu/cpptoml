@@ -1,4 +1,4 @@
-﻿// clang-format off
+// clang-format off
 /*
 # License
 This software is distributed under two licenses, choose whichever you like.
@@ -269,6 +269,60 @@ TomlProxy TomlProxy::value() const
         return {TomlParser::Invalid, CPPTOML_NULL, CPPTOML_NULL};
     }
     return {values_[value_].size_, data_, values_};
+}
+
+namespace
+{
+    bool iswhitespace(const char c)
+    {
+        switch(c) {
+        case 0x09:
+        case 0x20:
+            return true;
+        default:
+            return false;
+        }
+    }
+
+}
+
+uint64_t TomlProxy::getTableName(uint32_t len, char* str) const
+{
+    CPPTOML_ASSERT(0<len);
+    CPPTOML_ASSERT(nullptr != str);
+    if(TomlType::Table != type()) {
+        str[0] = '\0';
+        return 0;
+    }
+    CPPTOML_ASSERT(data_[0] == '[');
+    const char* data = data_ + 1;
+    uint32_t i = 0;
+    for(; i<len; ++i){
+        if(!iswhitespace(data[i])){
+            break;
+        }
+    }
+    --len;
+    uint32_t o = 0;
+    for(; o<len; ++i){
+        if(data[i]==']'){
+            break;
+        }
+        str[o] = data[i];
+        ++o;
+    }
+    str[o] = '\0';
+    if(o<=0){
+        return o;
+    }
+    for(uint32_t j=o;0<j; --j){
+        if(!iswhitespace(str[j-1])){
+            o = j;
+            str[o] = '\0';
+            break;
+        }
+    }
+    return o;
 }
 
 uint64_t TomlProxy::getString(char* str) const

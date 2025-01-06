@@ -1,4 +1,4 @@
-﻿
+
 #ifdef _WIN32
 #    include <Windows.h>
 #else
@@ -57,7 +57,9 @@ void traverse(cpptoml::TomlProxy proxy)
 void traverse_object(cpptoml::TomlProxy proxy)
 {
     using namespace cpptoml;
-    printf("{");
+    char name[16];
+    proxy.getTableName(16, name);
+    printf("%s{", name);
     for(TomlProxy i = proxy.begin(); i; i = i.next()) {
         char key[128];
         i.key().getString(key);

@@ -1,4 +1,4 @@
-﻿#ifndef INC_CPPTOML_H_
+#ifndef INC_CPPTOML_H_
 #define INC_CPPTOML_H_
 // clang-format off
 /*
@@ -158,6 +158,14 @@ struct TomlProxy
      * @return value of an object's entry
      */
     TomlProxy value() const;
+
+    /**
+     * @brief Get the table name 
+     * @param [in] len ... buffer size of str with including null termination
+     * @param [out] str ... the result
+     * @return size of the result
+     */
+    uint64_t getTableName(uint32_t len, char* str) const;
 
     /**
      * @brief Get the value as string
