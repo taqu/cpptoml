@@ -192,6 +192,17 @@ struct TomlProxy
      */
     double getFloat64() const;
 
+     /**
+     * @brief Get the value as boolean
+     * @return the value as boolean
+     */
+    bool getBool() const;
+
+    /**
+     * @brief Compare string
+     * @param str 
+     * @return equals
+     */
     bool equalsString(const char* str) const;
 
     uint64_t value_;

@@ -366,6 +366,17 @@ double TomlProxy::getFloat64() const
     return value;
 }
 
+bool TomlProxy::getBool() const
+{
+    if(equalsString("true")){
+        return true;
+    }
+    if(equalsString("false")){
+		return false;
+	}
+    return false;
+}
+
 bool TomlProxy::equalsString(const char* str) const
 {
     return 0==::strncmp(str, data_ + values_[value_].start_, values_[value_].size_);
