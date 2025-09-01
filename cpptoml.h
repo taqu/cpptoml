@@ -175,6 +175,12 @@ struct TomlProxy
     uint64_t getString(char* str) const;
 
     /**
+     * @brief Get length of the value as string
+     * @return size of the string
+     */
+    uint64_t getStrLen() const;
+
+    /**
      * @brief Get the value as integer
      * @return the value as integer
      */
@@ -185,6 +191,8 @@ struct TomlProxy
      * @return the value as float
      */
     double getFloat64() const;
+
+    bool equalsString(const char* str) const;
 
     uint64_t value_;
     const char* data_;

@@ -332,6 +332,11 @@ uint64_t TomlProxy::getString(char* str) const
     return values_[value_].size_;
 }
 
+uint64_t TomlProxy::getStrLen() const
+{
+    return values_[value_].size_;
+}
+
 int64_t TomlProxy::getInt64() const
 {
     const char* first = data_ + values_[value_].start_;
@@ -359,6 +364,11 @@ double TomlProxy::getFloat64() const
     double value = strtod(buffer, CPPTOML_NULL);
 #endif
     return value;
+}
+
+bool TomlProxy::equalsString(const char* str) const
+{
+    return 0==::strncmp(str, data_ + values_[value_].start_, values_[value_].size_);
 }
 
 //--- TomlParser
